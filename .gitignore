@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# VS Code settings (interpreter path is machine-specific)
+.vscode/
+
+# Logs (grow constantly, not meaningful in version control)
+files/logs.txt
+
+# Real DB credentials - only files/config.example.txt is tracked
+files/config.txt
+
+# OS junk
+.DS_Store
+Thumbs.db

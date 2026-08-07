@@ -1,0 +1,16 @@
+# =====================================================
+# GoTravel - Database Configuration TEMPLATE
+# =====================================================
+
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_password_here
+DB_NAME=gotravel
+
+# =====================================================
+# Application Settings
+# =====================================================
+APP_NAME=GoTravel
+APP_VERSION=1.0 (Stage 1)
