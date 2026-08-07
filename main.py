@@ -27,6 +27,7 @@ import database
 import connection
 import login
 import user
+import admin
 
 
 def launch_gui():
@@ -45,7 +46,7 @@ def show_about():
     print("  - Booking, Payments, Wallet & Coupons")
     print("  - Reviews, Invoices & Booking History")
     print("  - Admin Panel & Travel Analytics")
-    print("\nCurrent build: Stage 2 - User Authentication & Profile")
+    print("\nCurrent build: Stage 3 - Admin Panel")
     utils.pause()
 
 
@@ -53,18 +54,20 @@ def show_help():
     utils.print_header("HELP")
     print("This is the GoTravel command line interface.")
     print("Use the number keys to navigate the menus shown on screen.")
-    print("\nAvailable right now (Stage 2):")
+    print("\nAvailable right now (Stage 3):")
     print("  1. Login")
     print("  2. Register")
-    print("  3. Test Database Connection")
-    print("  4. Initialize Database")
-    print("  5. About")
-    print("  6. Help")
+    print("  3. Admin Login")
+    print("  4. Test Database Connection")
+    print("  5. Initialize Database")
+    print("  6. About")
+    print("  7. Help")
     print("  0. Exit")
-    print("\nOnce logged in, you can view/edit your profile and")
-    print("change your password. Booking features (flights, trains,")
-    print("hotels, cabs, packages) will appear in your dashboard")
-    print("automatically as development continues.")
+    print("\nOnce logged in as a user, you can view/edit your profile")
+    print("and change your password. Admins can view, search, and")
+    print("manage user accounts from the admin dashboard.")
+    print("\nBooking features (flights, trains, hotels, cabs, packages)")
+    print("will appear automatically as development continues.")
     utils.pause()
 
 
@@ -158,6 +161,78 @@ def user_dashboard(current_user):
             utils.pause()
 
 
+def handle_admin_login():
+    """
+    Runs the admin login flow. If no admin accounts exist yet,
+    offers to create the very first one instead (bootstrap).
+    Returns the logged-in admin dict on success, or None.
+    """
+    if admin.get_admin_count() == 0:
+        utils.print_info("No admin accounts exist yet.")
+        if utils.confirm("Would you like to create the first admin account now? (y/n): "):
+            success, message = admin.register_admin(is_bootstrap=True)
+            if success:
+                utils.print_success(message + " Please log in now.")
+            else:
+                utils.print_error(message)
+            utils.pause()
+        return None
+
+    success, result = admin.admin_login()
+    if success:
+        utils.print_success(f"Welcome, {result['admin_name']}!")
+        utils.pause()
+        return result
+    else:
+        utils.print_error(result)
+        utils.pause()
+        return None
+
+
+def admin_dashboard(current_admin):
+    """
+    Menu shown after a successful admin login. Currently covers
+    user account management (Stage 3). As more tables are added
+    in later stages, this menu grows with them.
+    """
+    while True:
+        utils.clear_screen()
+        utils.print_logo()
+        utils.print_header(f"ADMIN PANEL - {current_admin['admin_name'].upper()}")
+        print("1. View All Users")
+        print("2. Search Users")
+        print("3. Activate / Deactivate User")
+        print("4. Delete User")
+        print("5. Add New Admin")
+        print("0. Logout")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            admin.view_all_users()
+        elif choice == "2":
+            admin.search_users()
+        elif choice == "3":
+            admin.toggle_user_status()
+        elif choice == "4":
+            admin.delete_user()
+        elif choice == "5":
+            success, message = admin.register_admin(is_bootstrap=False)
+            if success:
+                utils.print_success(message)
+            else:
+                utils.print_error(message)
+            utils.pause()
+        elif choice == "0":
+            utils.log_activity(f"Admin logged out: {current_admin['email']}")
+            utils.print_info("You have been logged out.")
+            utils.pause()
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
 def main_menu():
     """The main guest-facing CLI menu loop (before login)."""
     while True:
@@ -166,10 +241,11 @@ def main_menu():
         utils.print_header("MAIN MENU")
         print("1. Login")
         print("2. Register")
-        print("3. Test Database Connection")
-        print("4. Initialize Database")
-        print("5. About")
-        print("6. Help")
+        print("3. Admin Login")
+        print("4. Test Database Connection")
+        print("5. Initialize Database")
+        print("6. About")
+        print("7. Help")
         print("0. Exit")
 
         choice = input("\nEnter your choice: ").strip()
@@ -181,12 +257,16 @@ def main_menu():
         elif choice == "2":
             handle_register()
         elif choice == "3":
-            handle_test_connection()
+            logged_in_admin = handle_admin_login()
+            if logged_in_admin is not None:
+                admin_dashboard(logged_in_admin)
         elif choice == "4":
-            handle_initialize_database()
+            handle_test_connection()
         elif choice == "5":
-            show_about()
+            handle_initialize_database()
         elif choice == "6":
+            show_about()
+        elif choice == "7":
             show_help()
         elif choice == "0":
             print("\nThank you for using GoTravel. Safe travels!\n")

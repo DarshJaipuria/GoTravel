@@ -9,7 +9,7 @@ Currently in development, built stage by stage.
 
 - [x] Stage 1 — Project foundation (DB connection, config, utils, CLI shell)
 - [x] Stage 2 — User authentication & profile management
-- [ ] Stage 3 — Admin panel
+- [x] Stage 3 — Admin panel
 - [ ] Stage 4 — Flights & Trains
 - [ ] Stage 5 — Hotels & Cabs
 - [ ] Stage 6 — Holiday Packages & Booking engine

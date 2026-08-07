@@ -159,6 +159,38 @@ def hash_password(password):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
+def print_table(headers, rows):
+    """
+    Prints a simple, evenly-spaced text table.
+
+    Parameters:
+        headers (list[str]): column titles
+        rows (list[list]): each inner list is one row of values,
+            in the same order as headers
+
+    Used by admin.py (and, from later stages onward, by feature
+    modules) so every listing in the app looks consistent.
+    """
+    if not rows:
+        print("\nNo records found.")
+        return
+
+    str_rows = [[str(cell) for cell in row] for row in rows]
+
+    col_widths = [len(h) for h in headers]
+    for row in str_rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    header_line = "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+    separator = "-" * len(header_line)
+
+    print(f"\n{header_line}")
+    print(separator)
+    for row in str_rows:
+        print("  ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)))
+
+
 def log_activity(message):
     """
     Appends a timestamped line to files/logs.txt.
