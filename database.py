@@ -94,6 +94,39 @@ def execute_query(query, params=None):
             conn.close()
 
 
+def execute_many(query, param_list):
+    """
+    Executes the same INSERT/UPDATE query for many rows at once
+    using cursor.executemany() - far faster than calling
+    execute_query() in a loop when inserting hundreds of rows
+    (used by seed_data.py to load sample Airports/Stations/
+    Flights/Trains data).
+
+    Parameters:
+        query (str): SQL query with %s placeholders
+        param_list (list[tuple]): one tuple of values per row
+
+    Returns:
+        (success: bool, rows_affected_or_error_message)
+    """
+    conn = None
+    try:
+        conn = connection.get_connection(use_database=True)
+        cursor = conn.cursor()
+        cursor.executemany(query, param_list)
+        conn.commit()
+        row_count = cursor.rowcount
+        cursor.close()
+        conn.close()
+        return True, row_count
+    except Error as db_error:
+        utils.log_activity(f"Bulk insert failed: {db_error}")
+        return False, str(db_error)
+    finally:
+        if conn is not None and conn.is_connected():
+            conn.close()
+
+
 def fetch_query(query, params=None, fetch_one=False):
     """
     Executes a SELECT query safely.

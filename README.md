@@ -10,7 +10,7 @@ Currently in development, built stage by stage.
 - [x] Stage 1 — Project foundation (DB connection, config, utils, CLI shell)
 - [x] Stage 2 — User authentication & profile management
 - [x] Stage 3 — Admin panel
-- [ ] Stage 4 — Flights & Trains
+- [x] Stage 4 — Flights & Trains
 - [ ] Stage 5 — Hotels & Cabs
 - [ ] Stage 6 — Holiday Packages & Booking engine
 - [ ] Stage 7 — Payments, Wallet & Coupons
@@ -39,6 +39,10 @@ Matplotlib (analytics, later stage).
    ```
 5. From the main menu, choose **Initialize Database** first, then
    **Test Database Connection** to confirm everything's wired up.
+   '''
+6. Log in as an admin, then from the admin dashboard choose
+   **Load Sample Data** to populate ~480 sample flights and
+   ~480 sample trains across major Indian cities.
 
 ## Project Structure
 ```
