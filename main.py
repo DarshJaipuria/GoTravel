@@ -30,6 +30,8 @@ import user
 import admin
 import flights
 import trains
+import hotels
+import cabs
 import seed_data
 
 
@@ -49,7 +51,7 @@ def show_about():
     print("  - Booking, Payments, Wallet & Coupons")
     print("  - Reviews, Invoices & Booking History")
     print("  - Admin Panel & Travel Analytics")
-    print("\nCurrent build: Stage 4 - Flights & Trains")
+    print("\nCurrent build: Stage 5 - Hotels & Cabs")
     utils.pause()
 
 
@@ -57,7 +59,7 @@ def show_help():
     utils.print_header("HELP")
     print("This is the GoTravel command line interface.")
     print("Use the number keys to navigate the menus shown on screen.")
-    print("\nAvailable right now (Stage 4):")
+    print("\nAvailable right now (Stage 5):")
     print("  1. Login")
     print("  2. Register")
     print("  3. Admin Login")
@@ -66,12 +68,13 @@ def show_help():
     print("  6. About")
     print("  7. Help")
     print("  0. Exit")
-    print("\nOnce logged in as a user, you can search Flights and Trains,")
-    print("and view/edit your profile. Admins can manage user accounts,")
-    print("manage Flights and Trains, and load sample route data from")
-    print("the admin dashboard (first time only - use 'Load Sample Data').")
-    print("\nBooking, Hotels, Cabs, and Packages will appear automatically")
-    print("as development continues.")
+    print("\nOnce logged in as a user, you can search Flights, Trains,")
+    print("Hotels, and Cabs, and view/edit your profile. Admins can")
+    print("manage user accounts, manage Flights/Trains/Hotels/Cabs, and")
+    print("load sample data from the admin dashboard (first time only -")
+    print("use 'Load Sample Data').")
+    print("\nBooking and Holiday Packages will appear automatically as")
+    print("development continues.")
     utils.pause()
 
 
@@ -134,9 +137,9 @@ def handle_login():
 def user_dashboard(current_user):
     """
     Menu shown after a successful login. Search features (browse
-    only - no booking yet) were added in Stage 4. Booking itself
-    is added to this menu in Stage 6 without changing how it's
-    reached.
+    only - no booking yet) cover Flights/Trains (Stage 4) and
+    Hotels/Cabs (Stage 5). Booking itself is added to this menu
+    in Stage 6 without changing how it's reached.
     """
     while True:
         utils.clear_screen()
@@ -144,9 +147,11 @@ def user_dashboard(current_user):
         utils.print_header(f"WELCOME, {current_user['full_name'].upper()}")
         print("1. Search Flights")
         print("2. Search Trains")
-        print("3. View My Profile")
-        print("4. Edit My Profile")
-        print("5. Change Password")
+        print("3. Search Hotels")
+        print("4. Search Cabs")
+        print("5. View My Profile")
+        print("6. Edit My Profile")
+        print("7. Change Password")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -156,10 +161,14 @@ def user_dashboard(current_user):
         elif choice == "2":
             trains.search_trains()
         elif choice == "3":
-            user.view_profile(current_user)
+            hotels.search_hotels()
         elif choice == "4":
-            current_user = user.edit_profile(current_user)
+            cabs.search_cabs()
         elif choice == "5":
+            user.view_profile(current_user)
+        elif choice == "6":
+            current_user = user.edit_profile(current_user)
+        elif choice == "7":
             user.change_password(current_user)
         elif choice == "0":
             utils.log_activity(f"User logged out: {current_user['email']}")
@@ -257,11 +266,73 @@ def trains_management_menu():
             utils.pause()
 
 
+def hotels_management_menu():
+    """Admin submenu for managing Hotels and Rooms (Stage 5)."""
+    while True:
+        utils.clear_screen()
+        utils.print_logo()
+        utils.print_header("MANAGE HOTELS")
+        print("1. View / Search Hotels")
+        print("2. Add New Hotel")
+        print("3. Edit Hotel")
+        print("4. Delete Hotel")
+        print("5. Manage Rooms for a Hotel")
+        print("0. Back to Admin Panel")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            hotels.admin_view_hotels()
+        elif choice == "2":
+            hotels.admin_add_hotel()
+        elif choice == "3":
+            hotels.admin_edit_hotel()
+        elif choice == "4":
+            hotels.admin_delete_hotel()
+        elif choice == "5":
+            hotels.admin_manage_rooms()
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
+def cabs_management_menu():
+    """Admin submenu for managing Cabs (Stage 5)."""
+    while True:
+        utils.clear_screen()
+        utils.print_logo()
+        utils.print_header("MANAGE CABS")
+        print("1. View / Search Cabs")
+        print("2. Add New Cab")
+        print("3. Edit Cab")
+        print("4. Delete Cab")
+        print("0. Back to Admin Panel")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            cabs.admin_view_cabs()
+        elif choice == "2":
+            cabs.admin_add_cab()
+        elif choice == "3":
+            cabs.admin_edit_cab()
+        elif choice == "4":
+            cabs.admin_delete_cab()
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
 def handle_load_sample_data():
     """Triggers seed_data.run_full_seed() and reports what happened."""
     utils.print_header("LOAD SAMPLE DATA")
-    print("This loads sample Airports, Stations, Flights, and Trains")
-    print("data. Tables that already contain data are left untouched.")
+    print("This loads sample Airports, Stations, Flights, Trains,")
+    print("Hotels/Rooms, and Cabs data. Tables that already contain")
+    print("data are left untouched.")
 
     if not utils.confirm("Proceed? (y/n): "):
         utils.print_info("Cancelled.")
@@ -272,24 +343,22 @@ def handle_load_sample_data():
     summary = seed_data.run_full_seed()
 
     utils.print_success("Sample data check complete.")
-    print(f"  Airports in database : {summary['airports']}")
-    print(f"  Stations in database  : {summary['stations']}")
-    if summary["flights_inserted"]:
-        print(f"  Flights newly added   : {summary['flights_inserted']}")
-    else:
-        print("  Flights                : already had data, skipped")
-    if summary["trains_inserted"]:
-        print(f"  Trains newly added    : {summary['trains_inserted']}")
-    else:
-        print("  Trains                  : already had data, skipped")
+    print(f"  Airports in database  : {summary['airports']}")
+    print(f"  Stations in database   : {summary['stations']}")
+    print(f"  Flights newly added    : {summary['flights_inserted'] or 'already had data, skipped'}")
+    print(f"  Trains newly added     : {summary['trains_inserted'] or 'already had data, skipped'}")
+    print(f"  Hotels newly added     : {summary['hotels_inserted'] or 'already had data, skipped'}")
+    print(f"  Rooms newly added      : {summary['rooms_inserted'] or 'already had data, skipped'}")
+    print(f"  Cabs newly added       : {summary['cabs_inserted'] or 'already had data, skipped'}")
     utils.pause()
 
 
 def admin_dashboard(current_admin):
     """
     Menu shown after a successful admin login. Covers user account
-    management (Stage 3) and flight/train management (Stage 4). As
-    more tables are added in later stages, this menu grows with them.
+    management (Stage 3), flight/train management (Stage 4), and
+    hotel/cab management (Stage 5). As more tables are added in
+    later stages, this menu grows with them.
     """
     while True:
         utils.clear_screen()
@@ -302,7 +371,9 @@ def admin_dashboard(current_admin):
         print("5. Add New Admin")
         print("6. Manage Flights")
         print("7. Manage Trains")
-        print("8. Load Sample Data (Airports/Stations/Flights/Trains)")
+        print("8. Manage Hotels")
+        print("9. Manage Cabs")
+        print("10. Load Sample Data (Airports/Stations/Flights/Trains/Hotels/Cabs)")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -327,6 +398,10 @@ def admin_dashboard(current_admin):
         elif choice == "7":
             trains_management_menu()
         elif choice == "8":
+            hotels_management_menu()
+        elif choice == "9":
+            cabs_management_menu()
+        elif choice == "10":
             handle_load_sample_data()
         elif choice == "0":
             utils.log_activity(f"Admin logged out: {current_admin['email']}")
