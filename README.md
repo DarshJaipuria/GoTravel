@@ -11,7 +11,7 @@ Currently in development, built stage by stage.
 - [x] Stage 2 — User authentication & profile management
 - [x] Stage 3 — Admin panel
 - [x] Stage 4 — Flights & Trains
-- [ ] Stage 5 — Hotels & Cabs
+- [x] Stage 5 — Hotels & Cabs
 - [ ] Stage 6 — Holiday Packages & Booking engine
 - [ ] Stage 7 — Payments, Wallet & Coupons
 - [ ] Stage 8 — Reviews, Invoices & ticket generation
