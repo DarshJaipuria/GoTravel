@@ -3,7 +3,7 @@ hotels.py
 =====================================================
 Everything related to Hotels and Rooms:
     - search_hotels()       - used by logged-in users (browse only,
-                               booking is added in Stage 6)
+                               booking itself lives in booking.py)
     - Admin management: view/search hotels, add/edit/delete hotels,
       and manage each hotel's room types
 
@@ -11,6 +11,9 @@ A hotel can have several room types (Single, Double, Deluxe,
 Suite), each with its own price and availability - so hotel
 management and room management are handled as two related but
 separate sets of functions.
+
+Every function below lets the user type 'back' at any prompt
+to cancel out and return to the menu (see utils.GoBack).
 =====================================================
 """
 
@@ -48,15 +51,21 @@ def search_hotels():
     """
     User-facing hotel search. Asks for a city and an optional
     minimum star rating. Shows matching hotels with their room
-    types and prices. Browse only - no booking yet (Stage 6).
+    types and prices. Browse only - booking is done from the
+    Bookings menu.
     """
-    utils.print_header("SEARCH HOTELS")
+    utils.print_header("SEARCH HOTELS", show_back_hint=True)
 
-    city = utils.get_non_empty_input("City: ")
-    min_rating_input = input("Minimum Star Rating (1-5, optional): ").strip()
+    try:
+        city = utils.get_non_empty_input("City: ")
+        min_rating_input = utils.get_input("Minimum Star Rating (1-5, optional): ", default="")
+    except utils.GoBack:
+        utils.print_info("Search cancelled.")
+        utils.pause()
+        return
 
-    query = "SELECT * FROM Hotels WHERE city LIKE %s"
-    params = [f"%{city}%"]
+    query = "SELECT * FROM Hotels WHERE LOWER(city) LIKE %s"
+    params = [f"%{city.lower()}%"]
 
     if min_rating_input.isdigit():
         query += " AND star_rating >= %s"
@@ -84,11 +93,16 @@ def search_hotels():
 
 def admin_view_hotels():
     """Admin hotel listing with an optional city filter."""
-    utils.print_header("VIEW / SEARCH HOTELS")
-    city = input("City (optional): ").strip()
+    utils.print_header("VIEW / SEARCH HOTELS", show_back_hint=True)
+    try:
+        city = utils.get_input("City (optional): ", default="")
+    except utils.GoBack:
+        utils.print_info("Cancelled.")
+        utils.pause()
+        return
 
-    query = "SELECT * FROM Hotels WHERE city LIKE %s ORDER BY city, hotel_name LIMIT 40"
-    hotels = database.fetch_query(query, (f"%{city}%",))
+    query = "SELECT * FROM Hotels WHERE LOWER(city) LIKE %s ORDER BY city, hotel_name LIMIT 40"
+    hotels = database.fetch_query(query, (f"%{city.lower()}%",))
 
     if not hotels:
         utils.print_info("No hotels found.")
@@ -104,20 +118,25 @@ def admin_view_hotels():
 
 def admin_add_hotel():
     """Adds a new hotel, then immediately prompts for its room types."""
-    utils.print_header("ADD NEW HOTEL")
+    utils.print_header("ADD NEW HOTEL", show_back_hint=True)
 
-    hotel_name = utils.get_non_empty_input("Hotel Name: ")
-    city = utils.get_non_empty_input("City: ")
-    address = utils.get_non_empty_input("Address: ")
+    try:
+        hotel_name = utils.get_non_empty_input("Hotel Name: ")
+        city = utils.get_non_empty_input("City: ")
+        address = utils.get_non_empty_input("Address: ")
 
-    while True:
-        star_input = utils.get_non_empty_input("Star Rating (1-5): ")
-        if star_input.isdigit() and 1 <= int(star_input) <= 5:
-            star_rating = int(star_input)
-            break
-        print("Please enter a number from 1 to 5.")
+        while True:
+            star_input = utils.get_non_empty_input("Star Rating (1-5): ")
+            if star_input.isdigit() and 1 <= int(star_input) <= 5:
+                star_rating = int(star_input)
+                break
+            print("Please enter a number from 1 to 5.")
 
-    contact_number = utils.get_valid_phone("Contact Number (10 digits): ")
+        contact_number = utils.get_valid_phone("Contact Number (10 digits): ")
+    except utils.GoBack:
+        utils.print_info("Add cancelled. No hotel was added.")
+        utils.pause()
+        return
 
     success, result = database.execute_query(
         "INSERT INTO Hotels (hotel_name, city, address, star_rating, contact_number) "
@@ -134,8 +153,11 @@ def admin_add_hotel():
     utils.print_success(f"Hotel '{hotel_name}' added successfully (ID: {hotel_id}).")
     utils.log_activity(f"Admin added hotel: {hotel_name}")
 
-    if utils.confirm("Add a room type for this hotel now? (y/n): "):
-        _add_room_type(hotel_id)
+    try:
+        if utils.confirm("Add a room type for this hotel now? (y/n): "):
+            _add_room_type(hotel_id)
+    except utils.GoBack:
+        utils.print_info("Skipped adding a room type.")
 
     utils.pause()
 
@@ -143,11 +165,14 @@ def admin_add_hotel():
 def _add_room_type(hotel_id):
     """Collects one room type's details and inserts it for the given hotel."""
     print("\nRoom Types: Single, Double, Deluxe, Suite (or your own label)")
-    room_type = utils.get_non_empty_input("Room Type: ")
-
+    print("(Type 'back' at any prompt to skip adding this room type.)")
     try:
+        room_type = utils.get_non_empty_input("Room Type: ")
         price_per_night = float(utils.get_non_empty_input("Price per Night (Rs.): "))
         total_rooms = int(utils.get_non_empty_input("Total Rooms of this type: "))
+    except utils.GoBack:
+        utils.print_info("Room type not added.")
+        return
     except ValueError:
         utils.print_error("Price and room count must be numbers. Room type not added.")
         return
@@ -166,27 +191,28 @@ def _add_room_type(hotel_id):
 
 def admin_edit_hotel():
     """Edits a hotel's star rating and contact number by ID."""
-    utils.print_header("EDIT HOTEL")
-    hotel_id_input = utils.get_non_empty_input("Enter Hotel ID: ")
-    if not hotel_id_input.isdigit():
-        utils.print_error("Hotel ID must be a number.")
+    utils.print_header("EDIT HOTEL", show_back_hint=True)
+    try:
+        hotel = utils.get_record_by_id(
+            "Enter Hotel ID: ",
+            lambda hid: database.fetch_query(
+                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
+            ),
+            "No hotel found with that ID.",
+        )
+
+        print(f"\nEditing {hotel['hotel_name']} - press Enter to keep current value.\n")
+
+        rating_input = utils.get_input(f"Star Rating [{hotel['star_rating']}]: ")
+        star_rating = int(rating_input) if rating_input and rating_input.isdigit() else hotel["star_rating"]
+
+        contact_number = utils.get_input(
+            f"Contact Number [{hotel['contact_number']}]: ", default=hotel["contact_number"]
+        )
+    except utils.GoBack:
+        utils.print_info("Edit cancelled. No changes were made.")
         utils.pause()
         return
-
-    hotel = database.fetch_query(
-        "SELECT * FROM Hotels WHERE hotel_id = %s", (int(hotel_id_input),), fetch_one=True
-    )
-    if hotel is None:
-        utils.print_error("No hotel found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nEditing {hotel['hotel_name']} - press Enter to keep current value.\n")
-
-    rating_input = input(f"Star Rating [{hotel['star_rating']}]: ").strip()
-    star_rating = int(rating_input) if rating_input.isdigit() else hotel["star_rating"]
-
-    contact_number = input(f"Contact Number [{hotel['contact_number']}]: ").strip() or hotel["contact_number"]
 
     success, result = database.execute_query(
         "UPDATE Hotels SET star_rating = %s, contact_number = %s WHERE hotel_id = %s",
@@ -203,23 +229,22 @@ def admin_edit_hotel():
 
 def admin_delete_hotel():
     """Deletes a hotel AND all its room types by ID, after confirmation."""
-    utils.print_header("DELETE HOTEL")
-    hotel_id_input = utils.get_non_empty_input("Enter Hotel ID: ")
-    if not hotel_id_input.isdigit():
-        utils.print_error("Hotel ID must be a number.")
-        utils.pause()
-        return
+    utils.print_header("DELETE HOTEL", show_back_hint=True)
+    try:
+        hotel = utils.get_record_by_id(
+            "Enter Hotel ID: ",
+            lambda hid: database.fetch_query(
+                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
+            ),
+            "No hotel found with that ID.",
+        )
 
-    hotel = database.fetch_query(
-        "SELECT * FROM Hotels WHERE hotel_id = %s", (int(hotel_id_input),), fetch_one=True
-    )
-    if hotel is None:
-        utils.print_error("No hotel found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nYou are about to delete '{hotel['hotel_name']}' and all its room types.")
-    if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+        print(f"\nYou are about to delete '{hotel['hotel_name']}' and all its room types.")
+        if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+            utils.print_info("Deletion cancelled.")
+            utils.pause()
+            return
+    except utils.GoBack:
         utils.print_info("Deletion cancelled.")
         utils.pause()
         return
@@ -243,18 +268,17 @@ def admin_delete_hotel():
 
 def admin_manage_rooms():
     """Lets an admin view a hotel's rooms and add/edit/delete room types."""
-    utils.print_header("MANAGE ROOMS")
-    hotel_id_input = utils.get_non_empty_input("Enter Hotel ID: ")
-    if not hotel_id_input.isdigit():
-        utils.print_error("Hotel ID must be a number.")
-        utils.pause()
-        return
-
-    hotel = database.fetch_query(
-        "SELECT * FROM Hotels WHERE hotel_id = %s", (int(hotel_id_input),), fetch_one=True
-    )
-    if hotel is None:
-        utils.print_error("No hotel found with that ID.")
+    utils.print_header("MANAGE ROOMS", show_back_hint=True)
+    try:
+        hotel = utils.get_record_by_id(
+            "Enter Hotel ID: ",
+            lambda hid: database.fetch_query(
+                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
+            ),
+            "No hotel found with that ID.",
+        )
+    except utils.GoBack:
+        utils.print_info("Cancelled.")
         utils.pause()
         return
 
@@ -287,25 +311,24 @@ def admin_manage_rooms():
 
 
 def _edit_room_type():
-    room_id_input = utils.get_non_empty_input("Enter Room ID to edit: ")
-    if not room_id_input.isdigit():
-        utils.print_error("Room ID must be a number.")
+    try:
+        room = utils.get_record_by_id(
+            "Enter Room ID to edit: ",
+            lambda rid: database.fetch_query(
+                "SELECT * FROM Rooms WHERE room_id = %s", (rid,), fetch_one=True
+            ),
+            "No room found with that ID.",
+        )
+
+        price_input = utils.get_input(f"Price per Night [Rs. {room['price_per_night']}]: ")
+        price_per_night = float(price_input) if price_input else room["price_per_night"]
+
+        available_input = utils.get_input(f"Available Rooms [{room['available_rooms']}]: ")
+        available_rooms = int(available_input) if available_input else room["available_rooms"]
+    except utils.GoBack:
+        utils.print_info("Edit cancelled. No changes were made.")
         utils.pause()
         return
-
-    room = database.fetch_query(
-        "SELECT * FROM Rooms WHERE room_id = %s", (int(room_id_input),), fetch_one=True
-    )
-    if room is None:
-        utils.print_error("No room found with that ID.")
-        utils.pause()
-        return
-
-    price_input = input(f"Price per Night [Rs. {room['price_per_night']}]: ").strip()
-    price_per_night = float(price_input) if price_input else room["price_per_night"]
-
-    available_input = input(f"Available Rooms [{room['available_rooms']}]: ").strip()
-    available_rooms = int(available_input) if available_input else room["available_rooms"]
 
     success, result = database.execute_query(
         "UPDATE Rooms SET price_per_night = %s, available_rooms = %s WHERE room_id = %s",
@@ -321,21 +344,20 @@ def _edit_room_type():
 
 
 def _delete_room_type():
-    room_id_input = utils.get_non_empty_input("Enter Room ID to delete: ")
-    if not room_id_input.isdigit():
-        utils.print_error("Room ID must be a number.")
-        utils.pause()
-        return
+    try:
+        room = utils.get_record_by_id(
+            "Enter Room ID to delete: ",
+            lambda rid: database.fetch_query(
+                "SELECT * FROM Rooms WHERE room_id = %s", (rid,), fetch_one=True
+            ),
+            "No room found with that ID.",
+        )
 
-    room = database.fetch_query(
-        "SELECT * FROM Rooms WHERE room_id = %s", (int(room_id_input),), fetch_one=True
-    )
-    if room is None:
-        utils.print_error("No room found with that ID.")
-        utils.pause()
-        return
-
-    if not utils.confirm(f"Delete room type '{room['room_type']}'? (y/n): "):
+        if not utils.confirm(f"Delete room type '{room['room_type']}'? (y/n): "):
+            utils.print_info("Deletion cancelled.")
+            utils.pause()
+            return
+    except utils.GoBack:
         utils.print_info("Deletion cancelled.")
         utils.pause()
         return

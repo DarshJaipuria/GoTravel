@@ -3,12 +3,15 @@ cabs.py
 =====================================================
 Everything related to Cabs:
     - search_cabs()      - used by logged-in users (browse only,
-                            booking is added in Stage 6)
+                            booking itself lives in booking.py)
     - Admin management: view/search all cabs, add, edit, delete
 
 Unlike Flights/Trains, a cab is a single vehicle booked as a
 whole (not sold seat-by-seat), so availability is tracked with
 a simple status: 'Available' or 'Booked'.
+
+Every function below lets the user type 'back' at any prompt
+to cancel out and return to the menu (see utils.GoBack).
 =====================================================
 """
 
@@ -33,21 +36,26 @@ def search_cabs():
     """
     User-facing cab search. Asks for source city, destination
     city, and an optional travel date. Shows matching available
-    cabs. Browse only - no booking yet (added in Stage 6).
+    cabs. Browse only - booking is done from the Bookings menu.
     """
-    utils.print_header("SEARCH CABS")
+    utils.print_header("SEARCH CABS", show_back_hint=True)
 
-    source_city = utils.get_non_empty_input("From (city): ")
-    destination_city = utils.get_non_empty_input("To (city): ")
-    travel_date_input = utils.get_valid_date(
-        "Travel Date (YYYY-MM-DD, press Enter for any upcoming date): ", allow_blank=True
-    )
+    try:
+        source_city = utils.get_non_empty_input("From (city): ")
+        destination_city = utils.get_non_empty_input("To (city): ")
+        travel_date_input = utils.get_valid_date(
+            "Travel Date (YYYY-MM-DD, press Enter for any upcoming date): ", allow_blank=True
+        )
+    except utils.GoBack:
+        utils.print_info("Search cancelled.")
+        utils.pause()
+        return
 
     query = (
-        "SELECT * FROM Cabs WHERE source_city LIKE %s AND destination_city LIKE %s "
+        "SELECT * FROM Cabs WHERE LOWER(source_city) LIKE %s AND LOWER(destination_city) LIKE %s "
         "AND status = 'Available'"
     )
-    params = [f"%{source_city}%", f"%{destination_city}%"]
+    params = [f"%{source_city.lower()}%", f"%{destination_city.lower()}%"]
 
     if travel_date_input:
         query += " AND travel_date = %s"
@@ -80,12 +88,17 @@ def search_cabs():
 
 def admin_view_cabs():
     """Admin cab listing with optional route filters."""
-    utils.print_header("VIEW / SEARCH CABS")
-    source_city = input("From (city, optional): ").strip()
-    destination_city = input("To (city, optional): ").strip()
+    utils.print_header("VIEW / SEARCH CABS", show_back_hint=True)
+    try:
+        source_city = utils.get_input("From (city, optional): ", default="")
+        destination_city = utils.get_input("To (city, optional): ", default="")
+    except utils.GoBack:
+        utils.print_info("Cancelled.")
+        utils.pause()
+        return
 
-    query = "SELECT * FROM Cabs WHERE source_city LIKE %s AND destination_city LIKE %s"
-    params = [f"%{source_city}%", f"%{destination_city}%"]
+    query = "SELECT * FROM Cabs WHERE LOWER(source_city) LIKE %s AND LOWER(destination_city) LIKE %s"
+    params = [f"%{source_city.lower()}%", f"%{destination_city.lower()}%"]
     query += " ORDER BY travel_date, departure_time LIMIT 40"
 
     cabs = database.fetch_query(query, tuple(params))
@@ -103,25 +116,29 @@ def admin_view_cabs():
 
 def admin_add_cab():
     """Collects details for a new cab and inserts it."""
-    utils.print_header("ADD NEW CAB")
-
-    cab_number = utils.get_non_empty_input("Cab Registration Number: ")
-    cab_type = utils.get_non_empty_input("Cab Type (Hatchback/Sedan/SUV/Mini Van): ")
-    driver_name = utils.get_non_empty_input("Driver Name: ")
-    source_city = utils.get_non_empty_input("Source City: ")
-
-    while True:
-        destination_city = utils.get_non_empty_input("Destination City: ")
-        if destination_city.strip().lower() != source_city.strip().lower():
-            break
-        print("Destination must be different from source.")
-
-    travel_date_input = utils.get_valid_date("Travel Date (YYYY-MM-DD): ")
-    departure_time = input("Departure Time (HH:MM, 24-hour): ").strip()
+    utils.print_header("ADD NEW CAB", show_back_hint=True)
 
     try:
+        cab_number = utils.get_non_empty_input("Cab Registration Number: ")
+        cab_type = utils.get_non_empty_input("Cab Type (Hatchback/Sedan/SUV/Mini Van): ")
+        driver_name = utils.get_non_empty_input("Driver Name: ")
+        source_city = utils.get_non_empty_input("Source City: ")
+
+        while True:
+            destination_city = utils.get_non_empty_input("Destination City: ")
+            if destination_city.strip().lower() != source_city.strip().lower():
+                break
+            print("Destination must be different from source.")
+
+        travel_date_input = utils.get_valid_date("Travel Date (YYYY-MM-DD): ", disallow_past=True)
+        departure_time = utils.get_non_empty_input("Departure Time (HH:MM, 24-hour): ")
+
         price = float(utils.get_non_empty_input("Price (Rs.): "))
         seats_capacity = int(utils.get_non_empty_input("Seat Capacity: "))
+    except utils.GoBack:
+        utils.print_info("Add cancelled. No cab was added.")
+        utils.pause()
+        return
     except ValueError:
         utils.print_error("Price and seat capacity must be numbers. Cab not added.")
         utils.pause()
@@ -150,27 +167,28 @@ def admin_add_cab():
 
 def admin_edit_cab():
     """Edits an existing cab's price or status by ID."""
-    utils.print_header("EDIT CAB")
-    cab_id_input = utils.get_non_empty_input("Enter Cab ID: ")
-    if not cab_id_input.isdigit():
-        utils.print_error("Cab ID must be a number.")
+    utils.print_header("EDIT CAB", show_back_hint=True)
+    try:
+        cab = utils.get_record_by_id(
+            "Enter Cab ID: ",
+            lambda cid: database.fetch_query(
+                "SELECT * FROM Cabs WHERE cab_id = %s", (cid,), fetch_one=True
+            ),
+            "No cab found with that ID.",
+        )
+
+        print(f"\nEditing Cab {cab['cab_number']} - press Enter to keep current value.\n")
+
+        price_input = utils.get_input(f"Price [Rs. {cab['price']}]: ")
+        price = float(price_input) if price_input else cab["price"]
+
+        status = utils.get_input(
+            f"Status [{cab['status']}] (Available/Booked): ", default=cab["status"]
+        )
+    except utils.GoBack:
+        utils.print_info("Edit cancelled. No changes were made.")
         utils.pause()
         return
-
-    cab = database.fetch_query(
-        "SELECT * FROM Cabs WHERE cab_id = %s", (int(cab_id_input),), fetch_one=True
-    )
-    if cab is None:
-        utils.print_error("No cab found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nEditing Cab {cab['cab_number']} - press Enter to keep current value.\n")
-
-    price_input = input(f"Price [Rs. {cab['price']}]: ").strip()
-    price = float(price_input) if price_input else cab["price"]
-
-    status = input(f"Status [{cab['status']}] (Available/Booked): ").strip() or cab["status"]
 
     success, result = database.execute_query(
         "UPDATE Cabs SET price = %s, status = %s WHERE cab_id = %s",
@@ -187,23 +205,22 @@ def admin_edit_cab():
 
 def admin_delete_cab():
     """Deletes a cab by ID, after confirmation."""
-    utils.print_header("DELETE CAB")
-    cab_id_input = utils.get_non_empty_input("Enter Cab ID: ")
-    if not cab_id_input.isdigit():
-        utils.print_error("Cab ID must be a number.")
-        utils.pause()
-        return
+    utils.print_header("DELETE CAB", show_back_hint=True)
+    try:
+        cab = utils.get_record_by_id(
+            "Enter Cab ID: ",
+            lambda cid: database.fetch_query(
+                "SELECT * FROM Cabs WHERE cab_id = %s", (cid,), fetch_one=True
+            ),
+            "No cab found with that ID.",
+        )
 
-    cab = database.fetch_query(
-        "SELECT * FROM Cabs WHERE cab_id = %s", (int(cab_id_input),), fetch_one=True
-    )
-    if cab is None:
-        utils.print_error("No cab found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nYou are about to delete cab {cab['cab_number']} ({cab['driver_name']}).")
-    if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+        print(f"\nYou are about to delete cab {cab['cab_number']} ({cab['driver_name']}).")
+        if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+            utils.print_info("Deletion cancelled.")
+            utils.pause()
+            return
+    except utils.GoBack:
         utils.print_info("Deletion cancelled.")
         utils.pause()
         return

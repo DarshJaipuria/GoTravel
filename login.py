@@ -12,6 +12,10 @@ Responsibilities:
 Profile viewing/editing and password changes for an
 ALREADY logged-in user live in user.py, not here - this
 module's job ends the moment a session starts or fails.
+
+Both register_user() and login_user() let the user type
+'back' at any prompt to cancel out and return to the main
+menu, instead of being forced to finish or restart the app.
 =====================================================
 """
 
@@ -44,37 +48,41 @@ def register_user():
     Returns:
         (success: bool, message: str)
     """
-    utils.print_header("CREATE A NEW ACCOUNT")
+    utils.print_header("CREATE A NEW ACCOUNT", show_back_hint=True)
 
-    full_name = utils.get_non_empty_input("Full Name: ")
+    try:
+        full_name = utils.get_non_empty_input("Full Name: ")
 
-    while True:
-        email = utils.get_valid_email("Email: ")
-        if _email_exists(email):
-            print("An account with this email already exists. Try logging in instead.")
-            continue
-        break
+        while True:
+            email = utils.get_valid_email("Email: ")
+            if _email_exists(email):
+                print("An account with this email already exists. Try logging in instead.")
+                continue
+            break
 
-    while True:
-        phone = utils.get_valid_phone("Phone Number (10 digits): ")
-        if _phone_exists(phone):
-            print("An account with this phone number already exists.")
-            continue
-        break
+        while True:
+            phone = utils.get_valid_phone("Phone Number (10 digits): ")
+            if _phone_exists(phone):
+                print("An account with this phone number already exists.")
+                continue
+            break
 
-    while True:
-        password = utils.get_password("Password (min 6 characters): ")
-        confirm_password = input("Confirm Password: ").strip()
-        if password != confirm_password:
-            print("Passwords do not match. Please try again.")
-            continue
-        break
+        while True:
+            password = utils.get_password("Password (min 6 characters): ")
+            confirm_password = utils.get_input("Confirm Password: ", default="")
+            if password != confirm_password:
+                print("Passwords do not match. Please try again.")
+                continue
+            break
 
-    gender = input("Gender (Male/Female/Other, optional): ").strip() or None
-    date_of_birth = utils.get_valid_date(
-        "Date of Birth (YYYY-MM-DD, optional, press Enter to skip): ", allow_blank=True
-    )
-    address = input("Address (optional): ").strip() or None
+        gender = utils.get_input("Gender (Male/Female/Other, optional): ")
+        date_of_birth = utils.get_valid_date(
+            "Date of Birth (YYYY-MM-DD, optional, press Enter to skip): ", allow_blank=True
+        )
+        address = utils.get_input("Address (optional): ")
+    except utils.GoBack:
+        utils.print_info("Registration cancelled. No account was created.")
+        return False, None
 
     hashed_password = utils.hash_password(password)
 
@@ -104,13 +112,14 @@ def login_user():
         - On success: (True, user_dict)
         - On failure: (False, error_message)
     """
-    utils.print_header("LOGIN TO YOUR ACCOUNT")
+    utils.print_header("LOGIN TO YOUR ACCOUNT", show_back_hint=True)
 
-    identifier = utils.get_non_empty_input("Email or Phone Number: ")
-    password = input("Password: ").strip()
-
-    if not password:
-        return False, "Password cannot be empty."
+    try:
+        identifier = utils.get_non_empty_input("Email or Phone Number: ")
+        password = utils.get_non_empty_input("Password: ")
+    except utils.GoBack:
+        utils.print_info("Login cancelled.")
+        return False, None
 
     hashed_password = utils.hash_password(password)
 

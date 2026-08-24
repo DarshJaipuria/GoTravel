@@ -8,10 +8,11 @@
 --   Stage 1: Database creation, Users, Admins
 --   Stage 4: Airports, Stations, Flights, Trains
 --   Stage 5: Hotels, Rooms, Cabs
+--   Stage 6: Packages, Bookings
 --
 -- FUTURE STAGES will ADD tables such as:
---   Packages, Bookings, Payments, Wallet, Transactions,
---   Coupons, Reviews, Invoices, Reports, Notifications
+--   Payments, Wallet, Transactions, Coupons, Reviews,
+--   Invoices, Reports, Notifications
 -- These are intentionally NOT created yet to avoid
 -- unused/empty tables before their features exist.
 -- =====================================================
@@ -160,4 +161,46 @@ CREATE TABLE IF NOT EXISTS Cabs (
     price DECIMAL(10,2) NOT NULL,
     seats_capacity INT NOT NULL,
     status VARCHAR(20) DEFAULT 'Available'
+);
+
+-- -----------------------------------------------------
+-- Table: Packages (Stage 6)
+-- A fixed-itinerary holiday package with a limited number
+-- of traveller slots, similar in spirit to how Cabs track
+-- a simple availability count.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS Packages (
+    package_id INT AUTO_INCREMENT PRIMARY KEY,
+    package_name VARCHAR(150) NOT NULL,
+    destination VARCHAR(50) NOT NULL,
+    duration_days INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    description VARCHAR(255),
+    total_slots INT NOT NULL,
+    available_slots INT NOT NULL,
+    status VARCHAR(20) DEFAULT 'Active'
+);
+
+-- -----------------------------------------------------
+-- Table: Bookings (Stage 6)
+-- A single table covers every booking type. `booking_type`
+-- ('Flight'/'Train'/'Hotel'/'Cab'/'Package') tells booking.py
+-- which table `item_id` points into. `item_label` freezes a
+-- human-readable snapshot at booking time so history still
+-- reads clearly even if the original row changes later.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS Bookings (
+    booking_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    booking_type VARCHAR(20) NOT NULL,
+    item_id INT NOT NULL,
+    item_label VARCHAR(150) NOT NULL,
+    travel_date DATE,
+    quantity INT NOT NULL DEFAULT 1,
+    nights INT NOT NULL DEFAULT 1,
+    unit_price DECIMAL(10,2) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    booking_status VARCHAR(20) DEFAULT 'Confirmed',
+    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );

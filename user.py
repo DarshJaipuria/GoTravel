@@ -9,6 +9,9 @@ Handles operations for an ALREADY logged-in user:
 Authentication (login/registration) lives in login.py.
 This module assumes a valid `user` dictionary (as returned
 by login.login_user) is passed in by main.py.
+
+edit_profile() and change_password() let the user type
+'back' at any prompt to cancel out with no changes saved.
 =====================================================
 """
 
@@ -37,33 +40,39 @@ def edit_profile(user):
     it a stable login identifier.
 
     Returns the refreshed user dictionary (whether or not any
-    field was actually changed).
+    field was actually changed), or the original `user` unchanged
+    if the edit is cancelled with 'back'.
     """
-    utils.print_header("EDIT PROFILE")
+    utils.print_header("EDIT PROFILE", show_back_hint=True)
     print("Press Enter on any field to keep its current value.\n")
 
-    full_name = input(f"Full Name [{user['full_name']}]: ").strip() or user["full_name"]
+    try:
+        full_name = utils.get_input(f"Full Name [{user['full_name']}]: ", default=user["full_name"])
 
-    while True:
-        phone = input(f"Phone Number [{user['phone']}]: ").strip() or user["phone"]
-        if phone == user["phone"] or utils.PHONE_PATTERN.match(phone):
-            existing = database.fetch_query(
-                "SELECT user_id FROM Users WHERE phone = %s AND user_id != %s",
-                (phone, user["user_id"]),
-                fetch_one=True,
-            )
-            if existing:
-                print("That phone number is already used by another account.")
-                continue
-            break
-        print("Invalid phone number. Enter exactly 10 digits.")
+        while True:
+            phone = utils.get_input(f"Phone Number [{user['phone']}]: ", default=user["phone"])
+            if phone == user["phone"] or utils.PHONE_PATTERN.match(phone):
+                existing = database.fetch_query(
+                    "SELECT user_id FROM Users WHERE phone = %s AND user_id != %s",
+                    (phone, user["user_id"]),
+                    fetch_one=True,
+                )
+                if existing:
+                    print("That phone number is already used by another account.")
+                    continue
+                break
+            print("Invalid phone number. Enter exactly 10 digits.")
 
-    gender = input(f"Gender [{user['gender'] or 'Not set'}]: ").strip() or user["gender"]
-    date_of_birth = (
-        input(f"Date of Birth (YYYY-MM-DD) [{user['date_of_birth'] or 'Not set'}]: ").strip()
-        or user["date_of_birth"]
-    )
-    address = input(f"Address [{user['address'] or 'Not set'}]: ").strip() or user["address"]
+        gender = utils.get_input(f"Gender [{user['gender'] or 'Not set'}]: ", default=user["gender"])
+        date_of_birth = utils.get_input(
+            f"Date of Birth (YYYY-MM-DD) [{user['date_of_birth'] or 'Not set'}]: ",
+            default=user["date_of_birth"],
+        )
+        address = utils.get_input(f"Address [{user['address'] or 'Not set'}]: ", default=user["address"])
+    except utils.GoBack:
+        utils.print_info("Edit cancelled. No changes were made.")
+        utils.pause()
+        return user
 
     query = """
         UPDATE Users
@@ -94,16 +103,21 @@ def change_password(user):
     their current password. Returns nothing - the caller's `user`
     dict does not store the password, so no refresh is needed.
     """
-    utils.print_header("CHANGE PASSWORD")
+    utils.print_header("CHANGE PASSWORD", show_back_hint=True)
 
-    current_password = input("Current Password: ").strip()
-    if utils.hash_password(current_password) != user["password"]:
-        utils.print_error("Current password is incorrect.")
+    try:
+        current_password = utils.get_non_empty_input("Current Password: ")
+        if utils.hash_password(current_password) != user["password"]:
+            utils.print_error("Current password is incorrect.")
+            utils.pause()
+            return
+
+        new_password = utils.get_password("New Password (min 6 characters): ")
+        confirm_password = utils.get_input("Confirm New Password: ", default="")
+    except utils.GoBack:
+        utils.print_info("Password change cancelled. No changes were made.")
         utils.pause()
         return
-
-    new_password = utils.get_password("New Password (min 6 characters): ")
-    confirm_password = input("Confirm New Password: ").strip()
 
     if new_password != confirm_password:
         utils.print_error("New passwords do not match.")

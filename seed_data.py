@@ -2,8 +2,9 @@
 seed_data.py
 =====================================================
 Generates realistic sample data for Airports, Stations,
-Flights, Trains, Hotels, Rooms, and Cabs so the application
-has something to search from the moment it is set up.
+Flights, Trains, Hotels, Rooms, Cabs, and Holiday Packages
+so the application has something to search from the moment
+it is set up.
 
 This is a data-generation utility, not a feature module -
 it is triggered once from the admin dashboard ("Load Sample
@@ -137,6 +138,15 @@ ROOM_TYPES = ["Single", "Double", "Deluxe", "Suite"]
 ROOM_TYPE_PRICE_MULTIPLIER = {"Single": 1.0, "Double": 1.4, "Deluxe": 2.0, "Suite": 3.2}
 
 CAB_TYPES = {"Hatchback": 4, "Sedan": 4, "SUV": 6, "Mini Van": 8}  # type -> seat capacity
+
+PACKAGE_NAME_TEMPLATES = [
+    "{destination} Getaway", "Explore {destination}", "{destination} Honeymoon Special",
+    "{destination} Family Tour", "{destination} Adventure Package",
+    "Romantic {destination} Escape", "{destination} Heritage Tour",
+    "{destination} Budget Trip", "{destination} Weekend Special",
+]
+
+PACKAGE_DURATION_CHOICES = [2, 3, 4, 5, 6, 7]
 
 DRIVER_FIRST_NAMES = [
     "Rahul", "Amit", "Suresh", "Vijay", "Ramesh", "Anil", "Sanjay", "Deepak",
@@ -463,6 +473,60 @@ def seed_cabs(target_count=480):
     return len(rows)
 
 
+def seed_packages(target_count=60):
+    """
+    Inserts `target_count` randomly generated holiday package
+    records if the Packages table is currently empty. Reuses the
+    same city list as Hotels/Cabs, since packages are sold to the
+    same destinations.
+
+    Returns the number of packages inserted (0 if already seeded).
+    """
+    count_result = database.fetch_query("SELECT COUNT(*) AS total FROM Packages", fetch_one=True)
+    if count_result and count_result["total"] > 0:
+        return 0
+
+    destinations = _all_hotel_cab_cities()
+    rows = []
+
+    for _ in range(target_count):
+        destination = random.choice(destinations)
+        name_template = random.choice(PACKAGE_NAME_TEMPLATES)
+        package_name = name_template.format(destination=destination)
+
+        duration_days = random.choice(PACKAGE_DURATION_CHOICES)
+        nights = max(duration_days - 1, 1)
+
+        base_price = 3000 + duration_days * 1500
+        price = round((base_price + random.randint(-500, 3000)) / 100) * 100
+        price = max(price, 2500)
+
+        total_slots = random.choice([10, 15, 20, 25, 30])
+        available_slots = random.randint(int(total_slots * 0.2), total_slots)
+
+        description = (
+            f"{duration_days}D/{nights}N {destination} package including "
+            f"stay, breakfast and sightseeing."
+        )
+
+        rows.append((
+            package_name, destination, duration_days, price,
+            description, total_slots, available_slots, "Active",
+        ))
+
+    database.execute_many(
+        """
+        INSERT INTO Packages (
+            package_name, destination, duration_days, price,
+            description, total_slots, available_slots, status
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        rows,
+    )
+    utils.log_activity(f"Seeded {len(rows)} packages.")
+    return len(rows)
+
+
 def run_full_seed():
     """
     Runs the complete seeding process: Airports, Stations, then
@@ -485,6 +549,7 @@ def run_full_seed():
     trains_inserted = seed_trains(station_lookup)
     hotels_inserted, rooms_inserted = seed_hotels()
     cabs_inserted = seed_cabs()
+    packages_inserted = seed_packages()
 
     airport_total = database.fetch_query(
         "SELECT COUNT(*) AS total FROM Airports", fetch_one=True
@@ -501,4 +566,5 @@ def run_full_seed():
         "hotels_inserted": hotels_inserted,
         "rooms_inserted": rooms_inserted,
         "cabs_inserted": cabs_inserted,
+        "packages_inserted": packages_inserted,
     }

@@ -3,11 +3,14 @@ trains.py
 =====================================================
 Everything related to Trains:
     - search_trains()       - used by logged-in users (browse only,
-                               booking is added in Stage 6)
+                               booking itself lives in booking.py)
     - Admin management: view/search all trains, add, edit, delete
 
 Depends on the Stations table (reference data) which is
 populated by seed_data.py.
+
+Every function below lets the user type 'back' at any prompt
+to cancel out and return to the menu (see utils.GoBack).
 =====================================================
 """
 
@@ -42,7 +45,7 @@ TRAIN_SEARCH_QUERY = """
     FROM Trains t
     JOIN Stations s1 ON t.source_station_id = s1.station_id
     JOIN Stations s2 ON t.destination_station_id = s2.station_id
-    WHERE s1.city LIKE %s AND s2.city LIKE %s
+    WHERE LOWER(s1.city) LIKE %s AND LOWER(s2.city) LIKE %s
 """
 
 
@@ -63,19 +66,24 @@ def search_trains():
     """
     User-facing train search. Asks for source city, destination
     city, and an optional travel date. Shows matching upcoming
-    trains. Browse only - no booking yet (added in Stage 6).
+    trains. Browse only - booking is done from the Bookings menu.
     """
-    utils.print_header("SEARCH TRAINS")
+    utils.print_header("SEARCH TRAINS", show_back_hint=True)
     _print_station_reference()
 
-    source_city = utils.get_non_empty_input("\nFrom (city): ")
-    destination_city = utils.get_non_empty_input("To (city): ")
-    travel_date_input = utils.get_valid_date(
-        "Travel Date (YYYY-MM-DD, press Enter for any upcoming date): ", allow_blank=True
-    )
+    try:
+        source_city = utils.get_non_empty_input("\nFrom (city): ")
+        destination_city = utils.get_non_empty_input("To (city): ")
+        travel_date_input = utils.get_valid_date(
+            "Travel Date (YYYY-MM-DD, press Enter for any upcoming date): ", allow_blank=True
+        )
+    except utils.GoBack:
+        utils.print_info("Search cancelled.")
+        utils.pause()
+        return
 
     query = TRAIN_SEARCH_QUERY
-    params = [f"%{source_city}%", f"%{destination_city}%"]
+    params = [f"%{source_city.lower()}%", f"%{destination_city.lower()}%"]
 
     if travel_date_input:
         query += " AND t.travel_date = %s"
@@ -111,12 +119,17 @@ def admin_view_trains():
     Admin train listing with optional filters. Blank inputs mean
     'no filter on this field'. Shows up to 40 results at a time.
     """
-    utils.print_header("VIEW / SEARCH TRAINS")
-    source_city = input("From (city, optional): ").strip()
-    destination_city = input("To (city, optional): ").strip()
+    utils.print_header("VIEW / SEARCH TRAINS", show_back_hint=True)
+    try:
+        source_city = utils.get_input("From (city, optional): ", default="")
+        destination_city = utils.get_input("To (city, optional): ", default="")
+    except utils.GoBack:
+        utils.print_info("Cancelled.")
+        utils.pause()
+        return
 
     query = TRAIN_SEARCH_QUERY
-    params = [f"%{source_city}%", f"%{destination_city}%"]
+    params = [f"%{source_city.lower()}%", f"%{destination_city.lower()}%"]
     query += " ORDER BY t.travel_date, t.departure_time LIMIT 40"
 
     trains = database.fetch_query(query, tuple(params))
@@ -134,7 +147,7 @@ def admin_view_trains():
 
 def admin_add_train():
     """Collects details for a new train and inserts it."""
-    utils.print_header("ADD NEW TRAIN")
+    utils.print_header("ADD NEW TRAIN", show_back_hint=True)
     _print_station_reference()
 
     stations = {s["station_code"]: s for s in get_all_stations()}
@@ -143,27 +156,32 @@ def admin_add_train():
         utils.pause()
         return
 
-    train_number = utils.get_non_empty_input("\nTrain Number (5 digits): ")
-    train_name = utils.get_non_empty_input("Train Name: ")
+    try:
+        train_number = utils.get_non_empty_input("\nTrain Number (5 digits): ")
+        train_name = utils.get_non_empty_input("Train Name: ")
 
-    while True:
-        source_code = utils.get_non_empty_input("Source Station Code: ").upper()
-        if source_code in stations:
-            break
-        print("Unknown station code. Please use one from the list above.")
+        while True:
+            source_code = utils.get_non_empty_input("Source Station Code: ").upper()
+            if source_code in stations:
+                break
+            print("Unknown station code. Please use one from the list above.")
 
-    while True:
-        dest_code = utils.get_non_empty_input("Destination Station Code: ").upper()
-        if dest_code == source_code:
-            print("Destination must be different from source.")
-            continue
-        if dest_code in stations:
-            break
-        print("Unknown station code. Please use one from the list above.")
+        while True:
+            dest_code = utils.get_non_empty_input("Destination Station Code: ").upper()
+            if dest_code == source_code:
+                print("Destination must be different from source.")
+                continue
+            if dest_code in stations:
+                break
+            print("Unknown station code. Please use one from the list above.")
 
-    travel_date_input = utils.get_valid_date("Travel Date (YYYY-MM-DD): ")
-    departure_time = input("Departure Time (HH:MM, 24-hour): ").strip()
-    arrival_time = input("Arrival Time (HH:MM, 24-hour): ").strip()
+        travel_date_input = utils.get_valid_date("Travel Date (YYYY-MM-DD): ", disallow_past=True)
+        departure_time = utils.get_non_empty_input("Departure Time (HH:MM, 24-hour): ")
+        arrival_time = utils.get_non_empty_input("Arrival Time (HH:MM, 24-hour): ")
+    except utils.GoBack:
+        utils.print_info("Add cancelled. No train was added.")
+        utils.pause()
+        return
 
     try:
         dep_h, dep_m = map(int, departure_time.split(":"))
@@ -179,6 +197,10 @@ def admin_add_train():
     try:
         price = float(utils.get_non_empty_input("Price (Rs.): "))
         total_seats = int(utils.get_non_empty_input("Total Seats: "))
+    except utils.GoBack:
+        utils.print_info("Add cancelled. No train was added.")
+        utils.pause()
+        return
     except ValueError:
         utils.print_error("Price and seats must be numbers. Train not added.")
         utils.pause()
@@ -209,30 +231,31 @@ def admin_add_train():
 
 def admin_edit_train():
     """Edits an existing train's price, seats, or status by ID."""
-    utils.print_header("EDIT TRAIN")
-    train_id_input = utils.get_non_empty_input("Enter Train ID: ")
-    if not train_id_input.isdigit():
-        utils.print_error("Train ID must be a number.")
+    utils.print_header("EDIT TRAIN", show_back_hint=True)
+    try:
+        train = utils.get_record_by_id(
+            "Enter Train ID: ",
+            lambda tid: database.fetch_query(
+                "SELECT * FROM Trains WHERE train_id = %s", (tid,), fetch_one=True
+            ),
+            "No train found with that ID.",
+        )
+
+        print(f"\nEditing Train {train['train_number']} - press Enter to keep current value.\n")
+
+        price_input = utils.get_input(f"Price [Rs. {train['price']}]: ")
+        price = float(price_input) if price_input else train["price"]
+
+        seats_input = utils.get_input(f"Available Seats [{train['available_seats']}]: ")
+        available_seats = int(seats_input) if seats_input else train["available_seats"]
+
+        status = utils.get_input(
+            f"Status [{train['status']}] (Scheduled/Delayed/Cancelled): ", default=train["status"]
+        )
+    except utils.GoBack:
+        utils.print_info("Edit cancelled. No changes were made.")
         utils.pause()
         return
-
-    train = database.fetch_query(
-        "SELECT * FROM Trains WHERE train_id = %s", (int(train_id_input),), fetch_one=True
-    )
-    if train is None:
-        utils.print_error("No train found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nEditing Train {train['train_number']} - press Enter to keep current value.\n")
-
-    price_input = input(f"Price [Rs. {train['price']}]: ").strip()
-    price = float(price_input) if price_input else train["price"]
-
-    seats_input = input(f"Available Seats [{train['available_seats']}]: ").strip()
-    available_seats = int(seats_input) if seats_input else train["available_seats"]
-
-    status = input(f"Status [{train['status']}] (Scheduled/Delayed/Cancelled): ").strip() or train["status"]
 
     success, result = database.execute_query(
         "UPDATE Trains SET price = %s, available_seats = %s, status = %s WHERE train_id = %s",
@@ -249,24 +272,23 @@ def admin_edit_train():
 
 def admin_delete_train():
     """Deletes a train by ID, after confirmation."""
-    utils.print_header("DELETE TRAIN")
-    train_id_input = utils.get_non_empty_input("Enter Train ID: ")
-    if not train_id_input.isdigit():
-        utils.print_error("Train ID must be a number.")
-        utils.pause()
-        return
+    utils.print_header("DELETE TRAIN", show_back_hint=True)
+    try:
+        train = utils.get_record_by_id(
+            "Enter Train ID: ",
+            lambda tid: database.fetch_query(
+                "SELECT * FROM Trains WHERE train_id = %s", (tid,), fetch_one=True
+            ),
+            "No train found with that ID.",
+        )
 
-    train = database.fetch_query(
-        "SELECT * FROM Trains WHERE train_id = %s", (int(train_id_input),), fetch_one=True
-    )
-    if train is None:
-        utils.print_error("No train found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nYou are about to delete train {train['train_number']} "
-          f"on {train['travel_date']}.")
-    if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+        print(f"\nYou are about to delete train {train['train_number']} "
+              f"on {train['travel_date']}.")
+        if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+            utils.print_info("Deletion cancelled.")
+            utils.pause()
+            return
+    except utils.GoBack:
         utils.print_info("Deletion cancelled.")
         utils.pause()
         return

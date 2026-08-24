@@ -47,27 +47,39 @@ def register_admin(is_bootstrap=False):
     Returns:
         (success: bool, message: str)
     """
-    if is_bootstrap:
-        utils.print_header("FIRST-TIME ADMIN SETUP")
-        print("No admin accounts exist yet. Let's create the first one.\n")
-    else:
-        utils.print_header("ADD NEW ADMIN")
-
-    admin_name = utils.get_non_empty_input("Admin Name: ")
-
     while True:
-        email = utils.get_valid_email("Email: ")
-        if _email_exists(email):
-            print("An admin with this email already exists.")
-            continue
-        break
+        if is_bootstrap:
+            utils.print_header("FIRST-TIME ADMIN SETUP")
+            print("No admin accounts exist yet. Let's create the first one.")
+            print("(This step can't be skipped - the app needs at least one admin.)\n")
+        else:
+            utils.print_header("ADD NEW ADMIN", show_back_hint=True)
 
-    while True:
-        password = utils.get_password("Password (min 6 characters): ")
-        confirm_password = input("Confirm Password: ").strip()
-        if password != confirm_password:
-            print("Passwords do not match. Please try again.")
-            continue
+        try:
+            admin_name = utils.get_non_empty_input("Admin Name: ")
+
+            while True:
+                email = utils.get_valid_email("Email: ")
+                if _email_exists(email):
+                    print("An admin with this email already exists.")
+                    continue
+                break
+
+            while True:
+                password = utils.get_password("Password (min 6 characters): ")
+                confirm_password = utils.get_input("Confirm Password: ", default="")
+                if password != confirm_password:
+                    print("Passwords do not match. Please try again.")
+                    continue
+                break
+        except utils.GoBack:
+            if is_bootstrap:
+                utils.print_info("First-time admin setup can't be skipped. Let's try again.")
+                utils.pause()
+                continue
+            utils.print_info("Admin creation cancelled.")
+            return False, None
+
         break
 
     hashed_password = utils.hash_password(password)
@@ -92,13 +104,14 @@ def admin_login():
     Returns:
         (success: bool, admin_dict_or_message)
     """
-    utils.print_header("ADMIN LOGIN")
+    utils.print_header("ADMIN LOGIN", show_back_hint=True)
 
-    email = utils.get_non_empty_input("Admin Email: ")
-    password = input("Password: ").strip()
-
-    if not password:
-        return False, "Password cannot be empty."
+    try:
+        email = utils.get_non_empty_input("Admin Email: ")
+        password = utils.get_non_empty_input("Password: ")
+    except utils.GoBack:
+        utils.print_info("Login cancelled.")
+        return False, None
 
     hashed_password = utils.hash_password(password)
 
@@ -142,8 +155,14 @@ def view_all_users():
 
 def search_users():
     """Searches users by name, email, or phone (partial match)."""
-    utils.print_header("SEARCH USERS")
-    keyword = utils.get_non_empty_input("Enter name, email, or phone to search: ")
+    utils.print_header("SEARCH USERS", show_back_hint=True)
+    try:
+        keyword = utils.get_non_empty_input("Enter name, email, or phone to search: ")
+    except utils.GoBack:
+        utils.print_info("Search cancelled.")
+        utils.pause()
+        return
+
     like_pattern = f"%{keyword}%"
 
     users = database.fetch_query(
@@ -172,30 +191,29 @@ def search_users():
 
 def toggle_user_status():
     """Activates or deactivates a user account by ID."""
-    utils.print_header("ACTIVATE / DEACTIVATE USER")
+    utils.print_header("ACTIVATE / DEACTIVATE USER", show_back_hint=True)
     view_all_users_inline()
 
-    user_id_input = utils.get_non_empty_input("\nEnter User ID: ")
-    if not user_id_input.isdigit():
-        utils.print_error("User ID must be a number.")
-        utils.pause()
-        return
+    try:
+        target_user = utils.get_record_by_id(
+            "\nEnter User ID: ",
+            lambda uid: database.fetch_query(
+                "SELECT * FROM Users WHERE user_id = %s", (uid,), fetch_one=True
+            ),
+            "No user found with that ID.",
+        )
 
-    target_user = database.fetch_query(
-        "SELECT * FROM Users WHERE user_id = %s", (int(user_id_input),), fetch_one=True
-    )
-    if target_user is None:
-        utils.print_error("No user found with that ID.")
-        utils.pause()
-        return
+        current_status = "Active" if target_user["is_active"] else "Inactive"
+        new_status = 0 if target_user["is_active"] else 1
+        new_status_label = "Inactive" if target_user["is_active"] else "Active"
 
-    current_status = "Active" if target_user["is_active"] else "Inactive"
-    new_status = 0 if target_user["is_active"] else 1
-    new_status_label = "Inactive" if target_user["is_active"] else "Active"
-
-    print(f"\n{target_user['full_name']} is currently {current_status}.")
-    if not utils.confirm(f"Change status to {new_status_label}? (y/n): "):
-        utils.print_info("No changes made.")
+        print(f"\n{target_user['full_name']} is currently {current_status}.")
+        if not utils.confirm(f"Change status to {new_status_label}? (y/n): "):
+            utils.print_info("No changes made.")
+            utils.pause()
+            return
+    except utils.GoBack:
+        utils.print_info("Cancelled. No changes made.")
         utils.pause()
         return
 
@@ -214,25 +232,24 @@ def toggle_user_status():
 
 def delete_user():
     """Permanently deletes a user account by ID, after confirmation."""
-    utils.print_header("DELETE USER")
+    utils.print_header("DELETE USER", show_back_hint=True)
     view_all_users_inline()
 
-    user_id_input = utils.get_non_empty_input("\nEnter User ID to delete: ")
-    if not user_id_input.isdigit():
-        utils.print_error("User ID must be a number.")
-        utils.pause()
-        return
+    try:
+        target_user = utils.get_record_by_id(
+            "\nEnter User ID to delete: ",
+            lambda uid: database.fetch_query(
+                "SELECT * FROM Users WHERE user_id = %s", (uid,), fetch_one=True
+            ),
+            "No user found with that ID.",
+        )
 
-    target_user = database.fetch_query(
-        "SELECT * FROM Users WHERE user_id = %s", (int(user_id_input),), fetch_one=True
-    )
-    if target_user is None:
-        utils.print_error("No user found with that ID.")
-        utils.pause()
-        return
-
-    print(f"\nYou are about to permanently delete: {target_user['full_name']} ({target_user['email']})")
-    if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+        print(f"\nYou are about to permanently delete: {target_user['full_name']} ({target_user['email']})")
+        if not utils.confirm("This cannot be undone. Continue? (y/n): "):
+            utils.print_info("Deletion cancelled.")
+            utils.pause()
+            return
+    except utils.GoBack:
         utils.print_info("Deletion cancelled.")
         utils.pause()
         return
@@ -246,6 +263,48 @@ def delete_user():
         utils.log_activity(f"Admin deleted user: {target_user['email']}")
     else:
         utils.print_error(f"Could not delete user: {result}")
+    utils.pause()
+
+
+def view_all_bookings():
+    """
+    Admin-facing overview of every booking made across all users
+    (Stage 6). Read-only - cancellations are still done by the
+    user themselves from their own Bookings menu.
+    """
+    utils.print_header("ALL BOOKINGS")
+    bookings = database.fetch_query(
+        """
+        SELECT b.booking_id, u.full_name, b.booking_type, b.item_label,
+               b.travel_date, b.quantity, b.total_amount, b.booking_status
+        FROM Bookings b
+        JOIN Users u ON b.user_id = u.user_id
+        ORDER BY b.booking_date DESC
+        LIMIT 100
+        """
+    )
+    if bookings is None:
+        utils.print_error("Could not fetch bookings.")
+        utils.pause()
+        return
+
+    if not bookings:
+        utils.print_info("No bookings have been made yet.")
+        utils.pause()
+        return
+
+    rows = [
+        [
+            b["booking_id"], b["full_name"], b["booking_type"], b["item_label"],
+            str(b["travel_date"]) if b["travel_date"] else "-",
+            b["quantity"], f"Rs. {b['total_amount']}", b["booking_status"],
+        ]
+        for b in bookings
+    ]
+    utils.print_header(f"{len(bookings)} BOOKING(S) (showing up to 100 most recent)")
+    utils.print_table(
+        ["ID", "User", "Type", "Details", "Date", "Qty", "Total", "Status"], rows
+    )
     utils.pause()
 
 

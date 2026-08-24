@@ -11,8 +11,8 @@ Currently in development, built stage by stage.
 - [x] Stage 2 — User authentication & profile management
 - [x] Stage 3 — Admin panel
 - [x] Stage 4 — Flights & Trains
-- [ ] Stage 5 — Hotels & Cabs
-- [ ] Stage 6 — Holiday Packages & Booking engine
+- [x] Stage 5 — Hotels & Cabs
+- [x] Stage 6 — Holiday Packages & Booking engine
 - [ ] Stage 7 — Payments, Wallet & Coupons
 - [ ] Stage 8 — Reviews, Invoices & ticket generation
 - [ ] Stage 9 — Reports & Analytics
@@ -41,8 +41,13 @@ Matplotlib (analytics, later stage).
    **Test Database Connection** to confirm everything's wired up.
    '''
 6. Log in as an admin, then from the admin dashboard choose
-   **Load Sample Data** to populate ~480 sample flights and
-   ~480 sample trains across major Indian cities.
+   **Load Sample Data** to populate ~480 sample flights, ~480
+   sample trains, ~160 hotels, ~480 cabs, and ~60 holiday
+   packages across major Indian cities.
+7. Log in as a regular user to search Flights/Trains/Hotels/
+   Cabs/Packages, then use **My Bookings** to book, view, or
+   cancel a booking (note the ID shown in search results, then
+   use it to book).
 
 ## Project Structure
 ```
@@ -53,7 +58,15 @@ GoTravel/
 ├── utils.py             Shared CLI helpers, validation, logging
 ├── login.py             Registration & authentication
 ├── user.py               Profile view/edit, password change
-├── sql/gotravel.sql       Database schema
+├── admin.py               Admin login, user management, bookings overview
+├── flights.py              Flight search + admin management
+├── trains.py                Train search + admin management
+├── hotels.py                  Hotel/Room search + admin management
+├── cabs.py                     Cab search + admin management
+├── packages.py                  Holiday Package search + admin management
+├── booking.py                    Book / view / cancel any booking type
+├── seed_data.py                   Sample data generator
+├── sql/gotravel.sql                Database schema
 └── files/
     ├── config.example.txt   Tracked config template
     ├── config.txt             Your real config (gitignored)
