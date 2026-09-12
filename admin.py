@@ -189,6 +189,13 @@ def search_users():
     utils.pause()
 
 
+def _fetch_user_by_id(user_id):
+    """Looks up a user account by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Users WHERE user_id = %s", (user_id,), fetch_one=True
+    )
+
+
 def toggle_user_status():
     """Activates or deactivates a user account by ID."""
     utils.print_header("ACTIVATE / DEACTIVATE USER", show_back_hint=True)
@@ -197,9 +204,7 @@ def toggle_user_status():
     try:
         target_user = utils.get_record_by_id(
             "\nEnter User ID: ",
-            lambda uid: database.fetch_query(
-                "SELECT * FROM Users WHERE user_id = %s", (uid,), fetch_one=True
-            ),
+            _fetch_user_by_id,
             "No user found with that ID.",
         )
 
@@ -238,9 +243,7 @@ def delete_user():
     try:
         target_user = utils.get_record_by_id(
             "\nEnter User ID to delete: ",
-            lambda uid: database.fetch_query(
-                "SELECT * FROM Users WHERE user_id = %s", (uid,), fetch_one=True
-            ),
+            _fetch_user_by_id,
             "No user found with that ID.",
         )
 
@@ -276,7 +279,8 @@ def view_all_bookings():
     bookings = database.fetch_query(
         """
         SELECT b.booking_id, u.full_name, b.booking_type, b.item_label,
-               b.travel_date, b.quantity, b.total_amount, b.booking_status
+               b.travel_date, b.quantity, b.total_amount, b.payment_method,
+               b.discount_amount, b.coupon_code, b.booking_status
         FROM Bookings b
         JOIN Users u ON b.user_id = u.user_id
         ORDER BY b.booking_date DESC
@@ -297,13 +301,16 @@ def view_all_bookings():
         [
             b["booking_id"], b["full_name"], b["booking_type"], b["item_label"],
             str(b["travel_date"]) if b["travel_date"] else "-",
-            b["quantity"], f"Rs. {b['total_amount']}", b["booking_status"],
+            b["quantity"], f"Rs. {b['total_amount']}",
+            b["payment_method"] or "-",
+            f"Rs. {b['discount_amount']} ({b['coupon_code']})" if b["discount_amount"] else "-",
+            b["booking_status"],
         ]
         for b in bookings
     ]
     utils.print_header(f"{len(bookings)} BOOKING(S) (showing up to 100 most recent)")
     utils.print_table(
-        ["ID", "User", "Type", "Details", "Date", "Qty", "Total", "Status"], rows
+        ["ID", "User", "Type", "Details", "Date", "Qty", "Total", "Payment", "Discount", "Status"], rows
     )
     utils.pause()
 

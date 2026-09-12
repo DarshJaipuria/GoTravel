@@ -13,7 +13,7 @@ Currently in development, built stage by stage.
 - [x] Stage 4 — Flights & Trains
 - [x] Stage 5 — Hotels & Cabs
 - [x] Stage 6 — Holiday Packages & Booking engine
-- [ ] Stage 7 — Payments, Wallet & Coupons
+- [x] Stage 7 — Payments, Wallet & Coupons
 - [ ] Stage 8 — Reviews, Invoices & ticket generation
 - [ ] Stage 9 — Reports & Analytics
 - [ ] Stage 10 — Tkinter GUI & polish
@@ -44,10 +44,17 @@ Matplotlib (analytics, later stage).
    **Load Sample Data** to populate ~480 sample flights, ~480
    sample trains, ~160 hotels, ~480 cabs, and ~60 holiday
    packages across major Indian cities.
-7. Log in as a regular user to search Flights/Trains/Hotels/
+7. Still as admin, optionally add a coupon or two from
+   **Manage Coupons** (e.g. a `WELCOME200` flat-Rs.200 coupon)
+   so there's something for users to try at checkout.
+8. Log in as a regular user to search Flights/Trains/Hotels/
    Cabs/Packages, then use **My Bookings** to book, view, or
    cancel a booking (note the ID shown in search results, then
-   use it to book).
+   use it to book). At checkout you can optionally apply a
+   coupon code, then pay via your **Wallet**, or simulated
+   Card/UPI (top up your Wallet from **My Wallet** first).
+   Cancelling a booking always refunds the amount to your
+   Wallet.
 
 ## Project Structure
 ```
@@ -64,7 +71,9 @@ GoTravel/
 ├── hotels.py                  Hotel/Room search + admin management
 ├── cabs.py                     Cab search + admin management
 ├── packages.py                  Holiday Package search + admin management
-├── booking.py                    Book / view / cancel any booking type
+├── booking.py                    Book / view / cancel + checkout (coupon + payment)
+├── wallet.py                       Wallet balance, top-ups, credit/debit helpers
+├── coupons.py                       Coupon validation + admin management
 ├── seed_data.py                   Sample data generator
 ├── sql/gotravel.sql                Database schema
 └── files/

@@ -229,15 +229,20 @@ def admin_add_flight():
     utils.pause()
 
 
+def _fetch_flight_by_id(flight_id):
+    """Looks up a flight by ID (any status)."""
+    return database.fetch_query(
+        "SELECT * FROM Flights WHERE flight_id = %s", (flight_id,), fetch_one=True
+    )
+
+
 def admin_edit_flight():
     """Edits an existing flight's price, seats, or status by ID."""
     utils.print_header("EDIT FLIGHT", show_back_hint=True)
     try:
         flight = utils.get_record_by_id(
             "Enter Flight ID: ",
-            lambda fid: database.fetch_query(
-                "SELECT * FROM Flights WHERE flight_id = %s", (fid,), fetch_one=True
-            ),
+            _fetch_flight_by_id,
             "No flight found with that ID.",
         )
 
@@ -276,9 +281,7 @@ def admin_delete_flight():
     try:
         flight = utils.get_record_by_id(
             "Enter Flight ID: ",
-            lambda fid: database.fetch_query(
-                "SELECT * FROM Flights WHERE flight_id = %s", (fid,), fetch_one=True
-            ),
+            _fetch_flight_by_id,
             "No flight found with that ID.",
         )
 

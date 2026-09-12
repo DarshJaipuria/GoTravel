@@ -9,12 +9,27 @@
 --   Stage 4: Airports, Stations, Flights, Trains
 --   Stage 5: Hotels, Rooms, Cabs
 --   Stage 6: Packages, Bookings
+--   Stage 7: WalletTransactions, Coupons, plus
+--            payment_method/coupon_code/discount_amount
+--            columns on Bookings (see NOTE below)
 --
 -- FUTURE STAGES will ADD tables such as:
---   Payments, Wallet, Transactions, Coupons, Reviews,
---   Invoices, Reports, Notifications
+--   Reviews, Invoices, Reports, Notifications
 -- These are intentionally NOT created yet to avoid
 -- unused/empty tables before their features exist.
+--
+-- NOTE: this script only ever CREATEs tables - 'CREATE TABLE
+-- IF NOT EXISTS' does nothing if the table already exists. So
+-- if you already had GoTravel running BEFORE Stage 7, your
+-- existing Bookings table does NOT get the three new Stage 7
+-- columns (payment_method, coupon_code, discount_amount) just
+-- because this file changed - CREATE TABLE alone can't add a
+-- column to a table that's already there. That's fine though:
+-- database.py's initialize_database() also runs a few ALTER
+-- TABLE statements right after this script, specifically to
+-- add those three columns to an EXISTING Bookings table without
+-- touching any of its existing rows. Your old users and bookings
+-- are kept exactly as they are - nothing here deletes any data.
 -- =====================================================
 
 CREATE DATABASE IF NOT EXISTS gotravel;
@@ -189,6 +204,12 @@ CREATE TABLE IF NOT EXISTS Packages (
 -- human-readable snapshot at booking time so history still
 -- reads clearly even if the original row changes later.
 -- -----------------------------------------------------
+-- payment_method/coupon_code/discount_amount were added in
+-- Stage 7. A fresh install gets them immediately from this
+-- CREATE TABLE. If you're upgrading an existing database from
+-- before Stage 7, see the NOTE at the top of this file - those
+-- columns get added separately by database.py, without deleting
+-- any of your existing rows.
 CREATE TABLE IF NOT EXISTS Bookings (
     booking_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -202,5 +223,47 @@ CREATE TABLE IF NOT EXISTS Bookings (
     total_amount DECIMAL(10,2) NOT NULL,
     booking_status VARCHAR(20) DEFAULT 'Confirmed',
     booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    payment_method VARCHAR(10) DEFAULT 'Wallet',
+    coupon_code VARCHAR(30),
+    discount_amount DECIMAL(10,2) DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+-- -----------------------------------------------------
+-- Table: WalletTransactions (Stage 7)
+-- Every credit (top-up, refund) or debit (wallet-paid
+-- booking) against a user's Users.wallet_balance is logged
+-- here, with the resulting balance snapshotted so history
+-- reads clearly without recomputing anything.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS WalletTransactions (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    transaction_type VARCHAR(10) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    description VARCHAR(255),
+    balance_after DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+-- -----------------------------------------------------
+-- Table: Coupons (Stage 7)
+-- discount_type is 'Flat' (a fixed Rs. amount off) or
+-- 'Percentage' (optionally capped by max_discount_amount).
+-- usage_limit of NULL means unlimited redemptions.
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS Coupons (
+    coupon_id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(30) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    discount_type VARCHAR(10) NOT NULL,
+    discount_value DECIMAL(10,2) NOT NULL,
+    max_discount_amount DECIMAL(10,2),
+    min_booking_amount DECIMAL(10,2) DEFAULT 0,
+    usage_limit INT,
+    times_used INT DEFAULT 0,
+    expiry_date DATE,
+    status VARCHAR(20) DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

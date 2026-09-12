@@ -165,15 +165,20 @@ def admin_add_cab():
     utils.pause()
 
 
+def _fetch_cab_by_id(cab_id):
+    """Looks up a cab by ID (any status)."""
+    return database.fetch_query(
+        "SELECT * FROM Cabs WHERE cab_id = %s", (cab_id,), fetch_one=True
+    )
+
+
 def admin_edit_cab():
     """Edits an existing cab's price or status by ID."""
     utils.print_header("EDIT CAB", show_back_hint=True)
     try:
         cab = utils.get_record_by_id(
             "Enter Cab ID: ",
-            lambda cid: database.fetch_query(
-                "SELECT * FROM Cabs WHERE cab_id = %s", (cid,), fetch_one=True
-            ),
+            _fetch_cab_by_id,
             "No cab found with that ID.",
         )
 
@@ -209,9 +214,7 @@ def admin_delete_cab():
     try:
         cab = utils.get_record_by_id(
             "Enter Cab ID: ",
-            lambda cid: database.fetch_query(
-                "SELECT * FROM Cabs WHERE cab_id = %s", (cid,), fetch_one=True
-            ),
+            _fetch_cab_by_id,
             "No cab found with that ID.",
         )
 

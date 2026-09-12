@@ -33,7 +33,9 @@ import trains
 import hotels
 import cabs
 import packages
+import coupons
 import booking
+import wallet
 import seed_data
 
 
@@ -53,7 +55,7 @@ def show_about():
     print("  - Booking, Payments, Wallet & Coupons")
     print("  - Reviews, Invoices & Booking History")
     print("  - Admin Panel & Travel Analytics")
-    print("\nCurrent build: Stage 6 - Holiday Packages & Booking Engine")
+    print("\nCurrent build: Stage 7 - Payments, Wallet & Coupons")
     utils.pause()
 
 
@@ -61,7 +63,7 @@ def show_help():
     utils.print_header("HELP")
     print("This is the GoTravel command line interface.")
     print("Use the number keys to navigate the menus shown on screen.")
-    print("\nAvailable right now (Stage 6):")
+    print("\nAvailable right now (Stage 7):")
     print("  1. Login")
     print("  2. Register")
     print("  3. Admin Login")
@@ -73,13 +75,15 @@ def show_help():
     print("\nOnce logged in as a user, you can search Flights, Trains,")
     print("Hotels, Cabs, and Holiday Packages, then book them from the")
     print("Bookings menu (note the ID shown in search results, then use")
-    print("it to book). You can also view or cancel your bookings from")
-    print("there, and view/edit your profile. Admins can manage user")
-    print("accounts, manage Flights/Trains/Hotels/Cabs/Packages, view")
-    print("all bookings, and load sample data from the admin dashboard")
-    print("(first time only - use 'Load Sample Data').")
-    print("\nPayments, Wallet & Coupons will appear automatically as")
-    print("development continues.")
+    print("it to book). At checkout you can optionally apply a coupon")
+    print("code, then pay from your Wallet, or via simulated Card/UPI.")
+    print("Top up your Wallet any time from the My Wallet menu. You can")
+    print("also view or cancel your bookings from the Bookings menu -")
+    print("cancelling always refunds the amount paid back to your")
+    print("Wallet - and view/edit your profile. Admins can manage user")
+    print("accounts, manage Flights/Trains/Hotels/Cabs/Packages/Coupons,")
+    print("view all bookings, and load sample data from the admin")
+    print("dashboard (first time only - use 'Load Sample Data').")
     print("\nTip: while filling in any form (login, registration, add/edit")
     print("forms, bookings, etc.), type 'back' at any prompt to cancel out")
     print("and return to the menu - you don't need to finish the form or")
@@ -192,12 +196,42 @@ def bookings_menu(current_user):
             utils.pause()
 
 
+def wallet_menu(current_user):
+    """
+    Stage 7 submenu: view wallet balance/transaction history or
+    add funds (simulated top-up). Kept as its own submenu, like
+    the Bookings submenu, so the main user dashboard doesn't get
+    too crowded.
+    """
+    while True:
+        utils.clear_screen()
+        utils.print_logo()
+        utils.print_header("MY WALLET")
+        print("1. View Wallet & Transaction History")
+        print("2. Add Money to Wallet")
+        print("0. Back")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            wallet.view_wallet(current_user)
+        elif choice == "2":
+            wallet.add_funds(current_user)
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
 def user_dashboard(current_user):
     """
     Menu shown after a successful login. Search features cover
     Flights/Trains (Stage 4), Hotels/Cabs (Stage 5), and Holiday
     Packages (Stage 6). Booking, viewing, and cancelling live in
-    the Bookings submenu, also added in Stage 6.
+    the Bookings submenu (Stage 6), which now also handles coupons
+    and payment method selection at checkout (Stage 7). Wallet
+    top-ups and history live in their own submenu (Stage 7).
     """
     while True:
         utils.clear_screen()
@@ -209,9 +243,10 @@ def user_dashboard(current_user):
         print("4. Search Cabs")
         print("5. Search Holiday Packages")
         print("6. My Bookings (Book / View / Cancel)")
-        print("7. View My Profile")
-        print("8. Edit My Profile")
-        print("9. Change Password")
+        print("7. My Wallet (View / Add Funds)")
+        print("8. View My Profile")
+        print("9. Edit My Profile")
+        print("10. Change Password")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -229,10 +264,12 @@ def user_dashboard(current_user):
         elif choice == "6":
             bookings_menu(current_user)
         elif choice == "7":
-            user.view_profile(current_user)
+            wallet_menu(current_user)
         elif choice == "8":
-            current_user = user.edit_profile(current_user)
+            user.view_profile(current_user)
         elif choice == "9":
+            current_user = user.edit_profile(current_user)
+        elif choice == "10":
             user.change_password(current_user)
         elif choice == "0":
             utils.log_activity(f"User logged out: {current_user['email']}")
@@ -430,12 +467,47 @@ def packages_management_menu():
             utils.pause()
 
 
+def coupons_management_menu():
+    """Admin submenu for managing Coupons (Stage 7)."""
+    while True:
+        utils.clear_screen()
+        utils.print_logo()
+        utils.print_header("MANAGE COUPONS")
+        print("1. View / Search Coupons")
+        print("2. Add New Coupon")
+        print("3. Edit Coupon")
+        print("4. Delete Coupon")
+        print("0. Back to Admin Panel")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            coupons.admin_view_coupons()
+        elif choice == "2":
+            coupons.admin_add_coupon()
+        elif choice == "3":
+            coupons.admin_edit_coupon()
+        elif choice == "4":
+            coupons.admin_delete_coupon()
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
 def handle_load_sample_data():
     """Triggers seed_data.run_full_seed() and reports what happened."""
     utils.print_header("LOAD SAMPLE DATA")
     print("This loads sample Airports, Stations, Flights, Trains,")
-    print("Hotels/Rooms, Cabs, and Holiday Packages data. Tables")
-    print("that already contain data are left untouched.")
+    print("Hotels/Rooms, Cabs, Holiday Packages, and Coupons data.")
+    print("Airports/Stations/Hotels/Rooms/Packages are only filled in")
+    print("if they're currently empty - existing ones are left alone.")
+    print("Flights, Trains, Cabs, and Coupons are different: since")
+    print("their dates (travel date / expiry date) go stale over time,")
+    print("those four are ALWAYS cleared out and freshly regenerated")
+    print("every time you run this, dated from today onward. This also")
+    print("removes any coupon you added yourself through Manage Coupons.")
 
     try:
         if not utils.confirm("Proceed? (y/n): "):
@@ -450,15 +522,16 @@ def handle_load_sample_data():
     print("\nLoading... this may take a few seconds.")
     summary = seed_data.run_full_seed()
 
-    utils.print_success("Sample data check complete.")
-    print(f"  Airports in database  : {summary['airports']}")
+    utils.print_success("Sample data loaded.")
+    print(f"  Airports in database   : {summary['airports']}")
     print(f"  Stations in database   : {summary['stations']}")
-    print(f"  Flights newly added    : {summary['flights_inserted'] or 'already had data, skipped'}")
-    print(f"  Trains newly added     : {summary['trains_inserted'] or 'already had data, skipped'}")
+    print(f"  Flights (refreshed)    : {summary['flights_inserted']}")
+    print(f"  Trains (refreshed)     : {summary['trains_inserted']}")
     print(f"  Hotels newly added     : {summary['hotels_inserted'] or 'already had data, skipped'}")
     print(f"  Rooms newly added      : {summary['rooms_inserted'] or 'already had data, skipped'}")
-    print(f"  Cabs newly added       : {summary['cabs_inserted'] or 'already had data, skipped'}")
+    print(f"  Cabs (refreshed)       : {summary['cabs_inserted']}")
     print(f"  Packages newly added   : {summary['packages_inserted'] or 'already had data, skipped'}")
+    print(f"  Coupons (refreshed)    : {summary['coupons_inserted']}")
     utils.pause()
 
 
@@ -466,9 +539,10 @@ def admin_dashboard(current_admin):
     """
     Menu shown after a successful admin login. Covers user account
     management (Stage 3), flight/train management (Stage 4),
-    hotel/cab management (Stage 5), and package management plus a
-    read-only view of every booking (Stage 6). As more tables are
-    added in later stages, this menu grows with them.
+    hotel/cab management (Stage 5), package management plus a
+    read-only view of every booking (Stage 6), and coupon
+    management (Stage 7). As more tables are added in later
+    stages, this menu grows with them.
     """
     while True:
         utils.clear_screen()
@@ -484,8 +558,9 @@ def admin_dashboard(current_admin):
         print("8. Manage Hotels")
         print("9. Manage Cabs")
         print("10. Manage Holiday Packages")
-        print("11. View All Bookings")
-        print("12. Load Sample Data (Airports/Stations/Flights/Trains/Hotels/Cabs/Packages)")
+        print("11. Manage Coupons")
+        print("12. View All Bookings")
+        print("13. Load Sample Data (Airports/Stations/Flights/Trains/Hotels/Cabs/Packages)")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -516,8 +591,10 @@ def admin_dashboard(current_admin):
         elif choice == "10":
             packages_management_menu()
         elif choice == "11":
-            admin.view_all_bookings()
+            coupons_management_menu()
         elif choice == "12":
+            admin.view_all_bookings()
+        elif choice == "13":
             handle_load_sample_data()
         elif choice == "0":
             utils.log_activity(f"Admin logged out: {current_admin['email']}")

@@ -229,15 +229,20 @@ def admin_add_train():
     utils.pause()
 
 
+def _fetch_train_by_id(train_id):
+    """Looks up a train by ID (any status)."""
+    return database.fetch_query(
+        "SELECT * FROM Trains WHERE train_id = %s", (train_id,), fetch_one=True
+    )
+
+
 def admin_edit_train():
     """Edits an existing train's price, seats, or status by ID."""
     utils.print_header("EDIT TRAIN", show_back_hint=True)
     try:
         train = utils.get_record_by_id(
             "Enter Train ID: ",
-            lambda tid: database.fetch_query(
-                "SELECT * FROM Trains WHERE train_id = %s", (tid,), fetch_one=True
-            ),
+            _fetch_train_by_id,
             "No train found with that ID.",
         )
 
@@ -276,9 +281,7 @@ def admin_delete_train():
     try:
         train = utils.get_record_by_id(
             "Enter Train ID: ",
-            lambda tid: database.fetch_query(
-                "SELECT * FROM Trains WHERE train_id = %s", (tid,), fetch_one=True
-            ),
+            _fetch_train_by_id,
             "No train found with that ID.",
         )
 

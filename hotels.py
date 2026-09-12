@@ -189,15 +189,27 @@ def _add_room_type(hotel_id):
         utils.print_error(f"Could not add room type: {result}")
 
 
+def _fetch_hotel_by_id(hotel_id):
+    """Looks up a hotel by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Hotels WHERE hotel_id = %s", (hotel_id,), fetch_one=True
+    )
+
+
+def _fetch_room_by_id(room_id):
+    """Looks up a room type by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Rooms WHERE room_id = %s", (room_id,), fetch_one=True
+    )
+
+
 def admin_edit_hotel():
     """Edits a hotel's star rating and contact number by ID."""
     utils.print_header("EDIT HOTEL", show_back_hint=True)
     try:
         hotel = utils.get_record_by_id(
             "Enter Hotel ID: ",
-            lambda hid: database.fetch_query(
-                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
-            ),
+            _fetch_hotel_by_id,
             "No hotel found with that ID.",
         )
 
@@ -233,9 +245,7 @@ def admin_delete_hotel():
     try:
         hotel = utils.get_record_by_id(
             "Enter Hotel ID: ",
-            lambda hid: database.fetch_query(
-                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
-            ),
+            _fetch_hotel_by_id,
             "No hotel found with that ID.",
         )
 
@@ -272,9 +282,7 @@ def admin_manage_rooms():
     try:
         hotel = utils.get_record_by_id(
             "Enter Hotel ID: ",
-            lambda hid: database.fetch_query(
-                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
-            ),
+            _fetch_hotel_by_id,
             "No hotel found with that ID.",
         )
     except utils.GoBack:
@@ -314,9 +322,7 @@ def _edit_room_type():
     try:
         room = utils.get_record_by_id(
             "Enter Room ID to edit: ",
-            lambda rid: database.fetch_query(
-                "SELECT * FROM Rooms WHERE room_id = %s", (rid,), fetch_one=True
-            ),
+            _fetch_room_by_id,
             "No room found with that ID.",
         )
 
@@ -347,9 +353,7 @@ def _delete_room_type():
     try:
         room = utils.get_record_by_id(
             "Enter Room ID to delete: ",
-            lambda rid: database.fetch_query(
-                "SELECT * FROM Rooms WHERE room_id = %s", (rid,), fetch_one=True
-            ),
+            _fetch_room_by_id,
             "No room found with that ID.",
         )
 

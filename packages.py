@@ -157,15 +157,20 @@ def admin_add_package():
     utils.pause()
 
 
+def _fetch_package_by_id(package_id):
+    """Looks up a package by ID (any status)."""
+    return database.fetch_query(
+        "SELECT * FROM Packages WHERE package_id = %s", (package_id,), fetch_one=True
+    )
+
+
 def admin_edit_package():
     """Edits an existing package's price, slots, or status by ID."""
     utils.print_header("EDIT PACKAGE", show_back_hint=True)
     try:
         package = utils.get_record_by_id(
             "Enter Package ID: ",
-            lambda pid: database.fetch_query(
-                "SELECT * FROM Packages WHERE package_id = %s", (pid,), fetch_one=True
-            ),
+            _fetch_package_by_id,
             "No package found with that ID.",
         )
 
@@ -204,9 +209,7 @@ def admin_delete_package():
     try:
         package = utils.get_record_by_id(
             "Enter Package ID: ",
-            lambda pid: database.fetch_query(
-                "SELECT * FROM Packages WHERE package_id = %s", (pid,), fetch_one=True
-            ),
+            _fetch_package_by_id,
             "No package found with that ID.",
         )
 

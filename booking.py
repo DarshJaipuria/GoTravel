@@ -22,16 +22,31 @@ of the project):
       booking history still reads clearly even if the underlying
       flight/train/hotel row is edited or deleted later.
     - Booking reduces availability immediately; cancelling a
-      booking restores it. No payment/wallet logic yet - that is
-      a later stage.
+      booking restores it.
+    - Stage 7 adds Payments, Wallet & Coupons on top of that:
+      every booking now goes through a shared _checkout() step
+      (optional coupon code, then a payment method - Wallet,
+      Card, or UPI). Card/UPI are simulated - there is no real
+      payment gateway - and always "succeed" once confirmed,
+      exactly like Wallet top-ups in wallet.py. Wallet payments
+      are checked for sufficient balance up front and only
+      actually debited once the Bookings row is safely inserted
+      (see _finalize_payment). Cancelling a booking always
+      refunds its total_amount to the user's Wallet as store
+      credit, regardless of how it was originally paid for,
+      since Card/UPI have no real transaction to reverse.
     - Every function lets the user type 'back' at any prompt to
       cancel out of the booking with no database changes made
       (see utils.GoBack).
 =====================================================
 """
 
+import coupons
 import database
 import utils
+import wallet
+
+PAYMENT_METHODS = ["Wallet", "Card", "UPI"]
 
 
 # ---------------------------------------------------------
@@ -39,18 +54,187 @@ import utils
 # ---------------------------------------------------------
 
 def _insert_booking(user_id, booking_type, item_id, item_label,
-                     travel_date, quantity, nights, unit_price, total_amount):
+                     travel_date, quantity, nights, unit_price, total_amount,
+                     payment_method, coupon_code, discount_amount):
     """Inserts one row into Bookings. Returns (success, booking_id_or_error)."""
     return database.execute_query(
         """
         INSERT INTO Bookings (
             user_id, booking_type, item_id, item_label, travel_date,
-            quantity, nights, unit_price, total_amount, booking_status
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'Confirmed')
+            quantity, nights, unit_price, total_amount, booking_status,
+            payment_method, coupon_code, discount_amount
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'Confirmed', %s, %s, %s)
         """,
         (user_id, booking_type, item_id, item_label, travel_date,
-         quantity, nights, unit_price, total_amount),
+         quantity, nights, unit_price, total_amount,
+         payment_method, coupon_code, discount_amount),
     )
+
+
+def _fetch_bookable_flight(flight_id):
+    """Looks up a Scheduled flight by ID, with its source/destination city names."""
+    return database.fetch_query(
+        """
+        SELECT f.*, a1.city AS source_city, a2.city AS destination_city
+        FROM Flights f
+        JOIN Airports a1 ON f.source_airport_id = a1.airport_id
+        JOIN Airports a2 ON f.destination_airport_id = a2.airport_id
+        WHERE f.flight_id = %s AND f.status = 'Scheduled'
+        """,
+        (flight_id,), fetch_one=True,
+    )
+
+
+def _fetch_bookable_train(train_id):
+    """Looks up a Scheduled train by ID, with its source/destination city names."""
+    return database.fetch_query(
+        """
+        SELECT t.*, s1.city AS source_city, s2.city AS destination_city
+        FROM Trains t
+        JOIN Stations s1 ON t.source_station_id = s1.station_id
+        JOIN Stations s2 ON t.destination_station_id = s2.station_id
+        WHERE t.train_id = %s AND t.status = 'Scheduled'
+        """,
+        (train_id,), fetch_one=True,
+    )
+
+
+def _fetch_hotel_by_id(hotel_id):
+    """Looks up a hotel by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Hotels WHERE hotel_id = %s", (hotel_id,), fetch_one=True
+    )
+
+
+def _fetch_available_cab(cab_id):
+    """Looks up a still-Available cab by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Cabs WHERE cab_id = %s AND status = 'Available'", (cab_id,), fetch_one=True
+    )
+
+
+def _fetch_active_package(package_id):
+    """Looks up an Active package by ID."""
+    return database.fetch_query(
+        "SELECT * FROM Packages WHERE package_id = %s AND status = 'Active'", (package_id,), fetch_one=True
+    )
+
+
+def _apply_coupon(subtotal):
+    """
+    Optionally shows the user every coupon that could currently be
+    applied to a booking of `subtotal`, then asks for a code and
+    validates it against `subtotal` via coupons.validate_coupon().
+    Lets them retry a different code on failure, or skip coupons
+    entirely.
+
+    Returns (coupon_row_or_None, discount_amount).
+    """
+    available = coupons.get_applicable_coupons(subtotal)
+    if available:
+        rows = [
+            [
+                c["code"],
+                f"{c['discount_value']}%" if c["discount_type"] == "Percentage" else f"Rs. {c['discount_value']}",
+                f"Rs. {c['min_booking_amount']}",
+                str(c["expiry_date"]) if c["expiry_date"] else "No expiry",
+            ]
+            for c in available
+        ]
+        print("\nCoupons you can apply to this booking:")
+        utils.print_table(["Code", "Discount", "Min. Booking", "Expiry"], rows)
+    else:
+        print("\nNo coupons are currently applicable to this booking.")
+        return None, 0
+
+    if not utils.confirm("Apply one of these coupons? (y/n): "):
+        return None, 0
+
+    while True:
+        code = utils.get_non_empty_input("Enter Coupon Code: ")
+        valid, coupon_or_message, discount = coupons.validate_coupon(code, subtotal)
+        if valid:
+            print(f"\nCoupon '{coupon_or_message['code']}' applied - you save Rs. {discount}.")
+            return coupon_or_message, discount
+        print(coupon_or_message)
+        if not utils.confirm("Try a different code? (y/n): "):
+            return None, 0
+
+
+def _choose_payment_method(user, amount_due):
+    """
+    Asks the user to choose how to pay `amount_due`. If Wallet is
+    chosen but the balance is insufficient, lets them pick again
+    instead of aborting the whole booking. Card and UPI are
+    simulated - no real gateway - and always succeed once chosen.
+
+    Returns the chosen payment method string.
+    """
+    while True:
+        print("\nPayment Method:")
+        for i, method in enumerate(PAYMENT_METHODS, start=1):
+            label = method
+            if method == "Wallet":
+                label += f" (Balance: Rs. {wallet.get_wallet_balance(user['user_id'])})"
+            print(f"  {i}. {label}")
+
+        choice = utils.get_non_empty_input("Choose a payment method (number): ")
+        if not (choice.isdigit() and 1 <= int(choice) <= len(PAYMENT_METHODS)):
+            print("Please enter a valid option number.")
+            continue
+
+        method = PAYMENT_METHODS[int(choice) - 1]
+        if method == "Wallet" and wallet.get_wallet_balance(user["user_id"]) < amount_due:
+            print("Insufficient wallet balance for this amount. "
+                  "Top up your wallet from the main menu, or choose Card/UPI instead.")
+            continue
+        return method
+
+
+def _checkout(user, subtotal):
+    """
+    Shared checkout flow used by every book_* function once the
+    subtotal is known: optional coupon application, then payment
+    method selection. Nothing is committed to the database here -
+    the caller inserts the Bookings row itself and then calls
+    _finalize_payment() only once that insert succeeds.
+
+    Returns a dict: {coupon, coupon_code, discount_amount, final_amount, payment_method}
+    Raises utils.GoBack if the user backs out of a prompt.
+    """
+    coupon, discount_amount = _apply_coupon(subtotal)
+    final_amount = round(subtotal - discount_amount, 2)
+
+    print(f"\nSubtotal: Rs. {subtotal}")
+    if discount_amount:
+        print(f"Discount: -Rs. {discount_amount}")
+    print(f"Total Payable: Rs. {final_amount}")
+
+    payment_method = _choose_payment_method(user, final_amount)
+
+    return {
+        "coupon": coupon,
+        "coupon_code": coupon["code"] if coupon else None,
+        "discount_amount": discount_amount,
+        "final_amount": final_amount,
+        "payment_method": payment_method,
+    }
+
+
+def _finalize_payment(user, checkout_info, booking_id):
+    """
+    Called AFTER a booking row has been successfully inserted.
+    Debits the wallet if that was the chosen payment method, and
+    marks any applied coupon as used. Card/UPI need no further
+    action here since they are simulated.
+    """
+    if checkout_info["payment_method"] == "Wallet" and checkout_info["final_amount"] > 0:
+        wallet.debit_wallet(
+            user["user_id"], checkout_info["final_amount"],
+            f"Payment for Booking #{booking_id}",
+        )
+    if checkout_info["coupon"]:
+        coupons.mark_coupon_used(checkout_info["coupon"]["coupon_id"])
 
 
 # ---------------------------------------------------------
@@ -64,16 +248,7 @@ def book_flight(user):
     try:
         flight = utils.get_record_by_id(
             "Enter Flight ID: ",
-            lambda fid: database.fetch_query(
-                """
-                SELECT f.*, a1.city AS source_city, a2.city AS destination_city
-                FROM Flights f
-                JOIN Airports a1 ON f.source_airport_id = a1.airport_id
-                JOIN Airports a2 ON f.destination_airport_id = a2.airport_id
-                WHERE f.flight_id = %s AND f.status = 'Scheduled'
-                """,
-                (fid,), fetch_one=True,
-            ),
+            _fetch_bookable_flight,
             "No bookable flight found with that ID (it may not exist, or may be Delayed/Cancelled).",
         )
         flight_id = flight["flight_id"]
@@ -94,8 +269,9 @@ def book_flight(user):
             utils.pause()
             return
 
-        total_amount = float(flight["price"]) * seats
-        print(f"\nTotal: Rs. {total_amount} for {seats} seat(s).")
+        subtotal = float(flight["price"]) * seats
+        checkout_info = _checkout(user, subtotal)
+
         if not utils.confirm("Confirm booking? (y/n): "):
             utils.print_info("Booking cancelled.")
             utils.pause()
@@ -108,7 +284,8 @@ def book_flight(user):
     label = f"{flight['flight_number']} {flight['source_city']} -> {flight['destination_city']}"
     success, result = _insert_booking(
         user["user_id"], "Flight", flight_id, label,
-        flight["travel_date"], seats, 1, flight["price"], total_amount,
+        flight["travel_date"], seats, 1, flight["price"], checkout_info["final_amount"],
+        checkout_info["payment_method"], checkout_info["coupon_code"], checkout_info["discount_amount"],
     )
     if not success:
         utils.print_error(f"Booking failed: {result}")
@@ -119,6 +296,7 @@ def book_flight(user):
         "UPDATE Flights SET available_seats = available_seats - %s WHERE flight_id = %s",
         (seats, flight_id),
     )
+    _finalize_payment(user, checkout_info, result)
     utils.print_success(f"Flight booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked flight {flight['flight_number']} x{seats}")
     utils.pause()
@@ -135,16 +313,7 @@ def book_train(user):
     try:
         train = utils.get_record_by_id(
             "Enter Train ID: ",
-            lambda tid: database.fetch_query(
-                """
-                SELECT t.*, s1.city AS source_city, s2.city AS destination_city
-                FROM Trains t
-                JOIN Stations s1 ON t.source_station_id = s1.station_id
-                JOIN Stations s2 ON t.destination_station_id = s2.station_id
-                WHERE t.train_id = %s AND t.status = 'Scheduled'
-                """,
-                (tid,), fetch_one=True,
-            ),
+            _fetch_bookable_train,
             "No bookable train found with that ID (it may not exist, or may be Delayed/Cancelled).",
         )
         train_id = train["train_id"]
@@ -165,8 +334,9 @@ def book_train(user):
             utils.pause()
             return
 
-        total_amount = float(train["price"]) * seats
-        print(f"\nTotal: Rs. {total_amount} for {seats} seat(s).")
+        subtotal = float(train["price"]) * seats
+        checkout_info = _checkout(user, subtotal)
+
         if not utils.confirm("Confirm booking? (y/n): "):
             utils.print_info("Booking cancelled.")
             utils.pause()
@@ -179,7 +349,8 @@ def book_train(user):
     label = f"{train['train_number']} {train['source_city']} -> {train['destination_city']}"
     success, result = _insert_booking(
         user["user_id"], "Train", train_id, label,
-        train["travel_date"], seats, 1, train["price"], total_amount,
+        train["travel_date"], seats, 1, train["price"], checkout_info["final_amount"],
+        checkout_info["payment_method"], checkout_info["coupon_code"], checkout_info["discount_amount"],
     )
     if not success:
         utils.print_error(f"Booking failed: {result}")
@@ -190,6 +361,7 @@ def book_train(user):
         "UPDATE Trains SET available_seats = available_seats - %s WHERE train_id = %s",
         (seats, train_id),
     )
+    _finalize_payment(user, checkout_info, result)
     utils.print_success(f"Train booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked train {train['train_number']} x{seats}")
     utils.pause()
@@ -206,9 +378,7 @@ def book_hotel(user):
     try:
         hotel = utils.get_record_by_id(
             "Enter Hotel ID: ",
-            lambda hid: database.fetch_query(
-                "SELECT * FROM Hotels WHERE hotel_id = %s", (hid,), fetch_one=True
-            ),
+            _fetch_hotel_by_id,
             "No hotel found with that ID.",
         )
         hotel_id = hotel["hotel_id"]
@@ -228,9 +398,17 @@ def book_hotel(user):
         ]
         utils.print_table(["Room ID", "Type", "Price", "Available"], rows)
 
+        def _find_room(room_id):
+            """Looks up a room type from the `rooms` list already fetched above,
+            instead of a fresh query - room_id here always belongs to this hotel."""
+            for r in rooms:
+                if r["room_id"] == room_id:
+                    return r
+            return None
+
         room = utils.get_record_by_id(
             "\nEnter Room ID to book: ",
-            lambda rid: next((r for r in rooms if r["room_id"] == rid), None),
+            _find_room,
             "That Room ID does not belong to this hotel.",
         )
 
@@ -251,8 +429,9 @@ def book_hotel(user):
             utils.pause()
             return
 
-        total_amount = float(room["price_per_night"]) * nights * num_rooms
-        print(f"\nTotal: Rs. {total_amount} for {num_rooms} room(s), {nights} night(s).")
+        subtotal = float(room["price_per_night"]) * nights * num_rooms
+        checkout_info = _checkout(user, subtotal)
+
         if not utils.confirm("Confirm booking? (y/n): "):
             utils.print_info("Booking cancelled.")
             utils.pause()
@@ -265,7 +444,8 @@ def book_hotel(user):
     label = f"{hotel['hotel_name']} ({room['room_type']}) - {hotel['city']}"
     success, result = _insert_booking(
         user["user_id"], "Hotel", room["room_id"], label,
-        check_in, num_rooms, nights, room["price_per_night"], total_amount,
+        check_in, num_rooms, nights, room["price_per_night"], checkout_info["final_amount"],
+        checkout_info["payment_method"], checkout_info["coupon_code"], checkout_info["discount_amount"],
     )
     if not success:
         utils.print_error(f"Booking failed: {result}")
@@ -276,6 +456,7 @@ def book_hotel(user):
         "UPDATE Rooms SET available_rooms = available_rooms - %s WHERE room_id = %s",
         (num_rooms, room["room_id"]),
     )
+    _finalize_payment(user, checkout_info, result)
     utils.print_success(f"Hotel room booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked {hotel['hotel_name']} x{num_rooms} room(s)")
     utils.pause()
@@ -292,9 +473,7 @@ def book_cab(user):
     try:
         cab = utils.get_record_by_id(
             "Enter Cab ID: ",
-            lambda cid: database.fetch_query(
-                "SELECT * FROM Cabs WHERE cab_id = %s AND status = 'Available'", (cid,), fetch_one=True
-            ),
+            _fetch_available_cab,
             "No available cab found with that ID (it may not exist, or may already be booked).",
         )
         cab_id = cab["cab_id"]
@@ -302,6 +481,9 @@ def book_cab(user):
         print(f"\n{cab['cab_type']} ({cab['cab_number']}), Driver: {cab['driver_name']}")
         print(f"{cab['source_city']} -> {cab['destination_city']} on {cab['travel_date']}")
         print(f"Price: Rs. {cab['price']} (whole vehicle, up to {cab['seats_capacity']} passengers)")
+
+        subtotal = float(cab["price"])
+        checkout_info = _checkout(user, subtotal)
 
         if not utils.confirm("Confirm booking? (y/n): "):
             utils.print_info("Booking cancelled.")
@@ -315,7 +497,8 @@ def book_cab(user):
     label = f"{cab['cab_type']} {cab['source_city']} -> {cab['destination_city']}"
     success, result = _insert_booking(
         user["user_id"], "Cab", cab_id, label,
-        cab["travel_date"], 1, 1, cab["price"], cab["price"],
+        cab["travel_date"], 1, 1, cab["price"], checkout_info["final_amount"],
+        checkout_info["payment_method"], checkout_info["coupon_code"], checkout_info["discount_amount"],
     )
     if not success:
         utils.print_error(f"Booking failed: {result}")
@@ -325,6 +508,7 @@ def book_cab(user):
     database.execute_query(
         "UPDATE Cabs SET status = 'Booked' WHERE cab_id = %s", (cab_id,)
     )
+    _finalize_payment(user, checkout_info, result)
     utils.print_success(f"Cab booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked cab {cab['cab_number']}")
     utils.pause()
@@ -341,9 +525,7 @@ def book_package(user):
     try:
         package = utils.get_record_by_id(
             "Enter Package ID: ",
-            lambda pid: database.fetch_query(
-                "SELECT * FROM Packages WHERE package_id = %s AND status = 'Active'", (pid,), fetch_one=True
-            ),
+            _fetch_active_package,
             "No active package found with that ID.",
         )
         package_id = package["package_id"]
@@ -365,9 +547,9 @@ def book_package(user):
             return
 
         travel_date_input = utils.get_valid_date("Preferred Start Date (YYYY-MM-DD): ", disallow_past=True)
-        total_amount = float(package["price"]) * travellers
+        subtotal = float(package["price"]) * travellers
+        checkout_info = _checkout(user, subtotal)
 
-        print(f"\nTotal: Rs. {total_amount} for {travellers} traveller(s).")
         if not utils.confirm("Confirm booking? (y/n): "):
             utils.print_info("Booking cancelled.")
             utils.pause()
@@ -380,7 +562,9 @@ def book_package(user):
     label = f"{package['package_name']} ({package['destination']})"
     success, result = _insert_booking(
         user["user_id"], "Package", package_id, label,
-        travel_date_input, travellers, package["duration_days"], package["price"], total_amount,
+        travel_date_input, travellers, package["duration_days"], package["price"],
+        checkout_info["final_amount"],
+        checkout_info["payment_method"], checkout_info["coupon_code"], checkout_info["discount_amount"],
     )
     if not success:
         utils.print_error(f"Booking failed: {result}")
@@ -391,6 +575,7 @@ def book_package(user):
         "UPDATE Packages SET available_slots = available_slots - %s WHERE package_id = %s",
         (travellers, package_id),
     )
+    _finalize_payment(user, checkout_info, result)
     utils.print_success(f"Package booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked package {package['package_name']} x{travellers}")
     utils.pause()
@@ -405,7 +590,8 @@ def _format_booking_rows(bookings):
         [
             b["booking_id"], b["booking_type"], b["item_label"],
             str(b["travel_date"]) if b["travel_date"] else "-",
-            b["quantity"], f"Rs. {b['total_amount']}", b["booking_status"],
+            b["quantity"], f"Rs. {b['total_amount']}",
+            b.get("payment_method") or "-", b["booking_status"],
         ]
         for b in bookings
     ]
@@ -424,7 +610,7 @@ def view_my_bookings(user):
         utils.print_info("You have no bookings yet.")
     else:
         utils.print_table(
-            ["ID", "Type", "Details", "Date", "Qty", "Total", "Status"],
+            ["ID", "Type", "Details", "Date", "Qty", "Total", "Payment", "Status"],
             _format_booking_rows(bookings),
         )
 
@@ -479,14 +665,23 @@ def cancel_booking(user):
         return
 
     utils.print_table(
-        ["ID", "Type", "Details", "Date", "Qty", "Total", "Status"],
+        ["ID", "Type", "Details", "Date", "Qty", "Total", "Payment", "Status"],
         _format_booking_rows(active_bookings),
     )
+
+    def _find_active_booking(booking_id):
+        """Looks up a booking from the `active_bookings` list already fetched
+        above, instead of a fresh query - keeps the lookup restricted to this
+        user's own Confirmed bookings only."""
+        for b in active_bookings:
+            if b["booking_id"] == booking_id:
+                return b
+        return None
 
     try:
         booking = utils.get_record_by_id(
             "\nEnter Booking ID to cancel: ",
-            lambda bid: next((b for b in active_bookings if b["booking_id"] == bid), None),
+            _find_active_booking,
             "That Booking ID is not one of your active bookings.",
         )
 
@@ -508,7 +703,27 @@ def cancel_booking(user):
 
     if success:
         _restore_availability(booking)
-        utils.print_success("Booking cancelled and availability restored.")
+
+        refund_amount = float(booking["total_amount"])
+        if refund_amount > 0:
+            refund_success, refund_result = wallet.credit_wallet(
+                user["user_id"], refund_amount,
+                f"Refund for cancelled Booking #{booking['booking_id']}",
+            )
+        else:
+            refund_success, refund_result = True, None
+
+        if refund_success and refund_amount > 0:
+            utils.print_success(
+                f"Booking cancelled and availability restored. Rs. {refund_amount} "
+                f"refunded to your wallet (new balance: Rs. {refund_result})."
+            )
+        elif refund_amount > 0:
+            utils.print_success("Booking cancelled and availability restored.")
+            utils.print_error(f"Refund to wallet failed: {refund_result}")
+        else:
+            utils.print_success("Booking cancelled and availability restored.")
+
         utils.log_activity(f"User {user['email']} cancelled booking ID {booking['booking_id']}")
     else:
         utils.print_error(f"Could not cancel booking: {result}")
