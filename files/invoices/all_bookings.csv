@@ -1,3 +1,0 @@
-Booking ID,User,Email,Type,Details,Travel Date,Quantity,Nights,Unit Price,Discount,Total Amount,Payment Method,Coupon Code,Status,Booking Date
-2,Darsh Jaipuria,test1@gmail.com,Hotel,Pune Garden Inn (Single) - Pune,28-05-2026,4,3,2400,0,28800,Wallet,,Confirmed,24-08-2026 16:40
-1,Darsh Jaipuria,test1@gmail.com,Flight,6E649 Kolkata -> Raipur,03-09-2026,3,1,3700,0,11100,Wallet,,Confirmed,24-08-2026 16:29
