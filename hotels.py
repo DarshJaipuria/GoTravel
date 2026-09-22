@@ -1,19 +1,8 @@
 """
 hotels.py
 =====================================================
-Everything related to Hotels and Rooms:
-    - search_hotels()       - used by logged-in users (browse only,
-                               booking itself lives in booking.py)
-    - Admin management: view/search hotels, add/edit/delete hotels,
-      and manage each hotel's room types
-
-A hotel can have several room types (Single, Double, Deluxe,
-Suite), each with its own price and availability - so hotel
-management and room management are handled as two related but
-separate sets of functions.
-
-Every function below lets the user type 'back' at any prompt
-to cancel out and return to the menu (see utils.GoBack).
+Everything related to Hotels and Rooms: search for users,
+admin add/edit/delete for hotels and their room types.
 =====================================================
 """
 
@@ -48,12 +37,7 @@ def _format_hotel_with_rooms(hotel):
 
 
 def search_hotels():
-    """
-    User-facing hotel search. Asks for a city and an optional
-    minimum star rating. Shows matching hotels with their room
-    types and prices. Browse only - booking is done from the
-    Bookings menu.
-    """
+    """User-facing hotel search, browse only (booking is done from the Bookings menu)."""
     utils.print_header("SEARCH HOTELS", show_back_hint=True)
 
     try:

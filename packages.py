@@ -1,18 +1,8 @@
 """
 packages.py
 =====================================================
-Everything related to Holiday Packages:
-    - search_packages()      - used by logged-in users (browse only,
-                                booking itself lives in booking.py)
-    - Admin management: view/search all packages, add, edit, delete
-
-A holiday package is a fixed itinerary (destination + number of
-days + price) with a limited number of slots, similar in spirit
-to how Cabs track a simple availability count rather than
-individual seats.
-
-Every function below lets the user type 'back' at any prompt
-to cancel out and return to the menu (see utils.GoBack).
+Everything related to Holiday Packages: search for users, admin
+add/edit/delete. Tracked by available_slots, like Cabs' status.
 =====================================================
 """
 
@@ -32,11 +22,7 @@ def _format_package_rows(packages):
 
 
 def search_packages():
-    """
-    User-facing package search. Asks for a destination (optional)
-    and shows matching active packages with slots still available.
-    Browse only - booking is done from the Bookings menu.
-    """
+    """User-facing package search, browse only (booking is done from the Bookings menu)."""
     utils.print_header("SEARCH HOLIDAY PACKAGES", show_back_hint=True)
 
     try:

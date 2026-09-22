@@ -1,48 +1,15 @@
 """
 booking.py
 =====================================================
-The booking engine. Covers booking, viewing, and cancelling
-for every bookable item in GoTravel:
-    - Flights   (seat-based)
-    - Trains    (seat-based)
-    - Hotels    (room-based, per night)
-    - Cabs      (whole-vehicle, one booking = one cab)
-    - Packages  (slot-based, per traveller)
-
-Design notes (kept deliberately simple, in line with the rest
-of the project):
-    - Every booking - regardless of type - is stored as ONE row
-      in a single `Bookings` table. The `booking_type` column
-      ('Flight'/'Train'/'Hotel'/'Cab'/'Package') tells us which
-      other table `item_id` points into. This avoids having four
-      near-identical booking tables and four near-identical sets
-      of view/cancel functions.
-    - `item_label` stores a short human-readable snapshot (e.g.
-      "6E203 Delhi -> Mumbai") taken at booking time, so a user's
-      booking history still reads clearly even if the underlying
-      flight/train/hotel row is edited or deleted later.
-    - Booking reduces availability immediately; cancelling a
-      booking restores it.
-    - Stage 7 adds Payments, Wallet & Coupons on top of that:
-      every booking now goes through a shared _checkout() step
-      (optional coupon code, then a payment method - Wallet,
-      Card, or UPI). Card/UPI are simulated - there is no real
-      payment gateway - and always "succeed" once confirmed,
-      exactly like Wallet top-ups in wallet.py. Wallet payments
-      are checked for sufficient balance up front and only
-      actually debited once the Bookings row is safely inserted
-      (see _finalize_payment). Cancelling a booking always
-      refunds its total_amount to the user's Wallet as store
-      credit, regardless of how it was originally paid for,
-      since Card/UPI have no real transaction to reverse.
-    - Every function lets the user type 'back' at any prompt to
-      cancel out of the booking with no database changes made
-      (see utils.GoBack).
+The booking engine: book/view/cancel Flights, Trains, Hotels,
+Cabs, and Packages, all stored in one Bookings table. Checkout
+also handles coupons and payment (Wallet/Card/UPI).
 =====================================================
 """
 
 import coupons
 import database
+import invoices
 import utils
 import wallet
 
@@ -121,15 +88,7 @@ def _fetch_active_package(package_id):
 
 
 def _apply_coupon(subtotal):
-    """
-    Optionally shows the user every coupon that could currently be
-    applied to a booking of `subtotal`, then asks for a code and
-    validates it against `subtotal` via coupons.validate_coupon().
-    Lets them retry a different code on failure, or skip coupons
-    entirely.
-
-    Returns (coupon_row_or_None, discount_amount).
-    """
+    """Shows applicable coupons and lets the user apply one by code."""
     available = coupons.get_applicable_coupons(subtotal)
     if available:
         rows = [
@@ -162,14 +121,7 @@ def _apply_coupon(subtotal):
 
 
 def _choose_payment_method(user, amount_due):
-    """
-    Asks the user to choose how to pay `amount_due`. If Wallet is
-    chosen but the balance is insufficient, lets them pick again
-    instead of aborting the whole booking. Card and UPI are
-    simulated - no real gateway - and always succeed once chosen.
-
-    Returns the chosen payment method string.
-    """
+    """Asks for Wallet/Card/UPI; loops back if Wallet balance is too low."""
     while True:
         print("\nPayment Method:")
         for i, method in enumerate(PAYMENT_METHODS, start=1):
@@ -192,16 +144,7 @@ def _choose_payment_method(user, amount_due):
 
 
 def _checkout(user, subtotal):
-    """
-    Shared checkout flow used by every book_* function once the
-    subtotal is known: optional coupon application, then payment
-    method selection. Nothing is committed to the database here -
-    the caller inserts the Bookings row itself and then calls
-    _finalize_payment() only once that insert succeeds.
-
-    Returns a dict: {coupon, coupon_code, discount_amount, final_amount, payment_method}
-    Raises utils.GoBack if the user backs out of a prompt.
-    """
+    """Runs coupon + payment steps and returns a dict with the final checkout details."""
     coupon, discount_amount = _apply_coupon(subtotal)
     final_amount = round(subtotal - discount_amount, 2)
 
@@ -222,12 +165,7 @@ def _checkout(user, subtotal):
 
 
 def _finalize_payment(user, checkout_info, booking_id):
-    """
-    Called AFTER a booking row has been successfully inserted.
-    Debits the wallet if that was the chosen payment method, and
-    marks any applied coupon as used. Card/UPI need no further
-    action here since they are simulated.
-    """
+    """Debits the wallet if used, and marks the coupon as used, after booking succeeds."""
     if checkout_info["payment_method"] == "Wallet" and checkout_info["final_amount"] > 0:
         wallet.debit_wallet(
             user["user_id"], checkout_info["final_amount"],
@@ -235,6 +173,19 @@ def _finalize_payment(user, checkout_info, booking_id):
         )
     if checkout_info["coupon"]:
         coupons.mark_coupon_used(checkout_info["coupon"]["coupon_id"])
+
+
+def _generate_documents(user, booking_id):
+    """Auto-generates the invoice and refreshes the CSV export for a new booking."""
+    try:
+        fresh_booking = database.fetch_query(
+            "SELECT * FROM Bookings WHERE booking_id = %s", (booking_id,), fetch_one=True
+        )
+        if fresh_booking:
+            invoices.generate_invoice_text(fresh_booking, user)
+            invoices.export_bookings_csv(user)
+    except Exception as file_error:
+        utils.log_activity(f"Could not auto-generate invoice/CSV for booking {booking_id}: {file_error}")
 
 
 # ---------------------------------------------------------
@@ -297,6 +248,7 @@ def book_flight(user):
         (seats, flight_id),
     )
     _finalize_payment(user, checkout_info, result)
+    _generate_documents(user, result)
     utils.print_success(f"Flight booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked flight {flight['flight_number']} x{seats}")
     utils.pause()
@@ -362,6 +314,7 @@ def book_train(user):
         (seats, train_id),
     )
     _finalize_payment(user, checkout_info, result)
+    _generate_documents(user, result)
     utils.print_success(f"Train booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked train {train['train_number']} x{seats}")
     utils.pause()
@@ -399,8 +352,7 @@ def book_hotel(user):
         utils.print_table(["Room ID", "Type", "Price", "Available"], rows)
 
         def _find_room(room_id):
-            """Looks up a room type from the `rooms` list already fetched above,
-            instead of a fresh query - room_id here always belongs to this hotel."""
+            """Finds a room from the list already fetched for this hotel."""
             for r in rooms:
                 if r["room_id"] == room_id:
                     return r
@@ -457,6 +409,7 @@ def book_hotel(user):
         (num_rooms, room["room_id"]),
     )
     _finalize_payment(user, checkout_info, result)
+    _generate_documents(user, result)
     utils.print_success(f"Hotel room booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked {hotel['hotel_name']} x{num_rooms} room(s)")
     utils.pause()
@@ -509,6 +462,7 @@ def book_cab(user):
         "UPDATE Cabs SET status = 'Booked' WHERE cab_id = %s", (cab_id,)
     )
     _finalize_payment(user, checkout_info, result)
+    _generate_documents(user, result)
     utils.print_success(f"Cab booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked cab {cab['cab_number']}")
     utils.pause()
@@ -576,6 +530,7 @@ def book_package(user):
         (travellers, package_id),
     )
     _finalize_payment(user, checkout_info, result)
+    _generate_documents(user, result)
     utils.print_success(f"Package booked! Booking ID: {result}")
     utils.log_activity(f"User {user['email']} booked package {package['package_name']} x{travellers}")
     utils.pause()
@@ -670,9 +625,7 @@ def cancel_booking(user):
     )
 
     def _find_active_booking(booking_id):
-        """Looks up a booking from the `active_bookings` list already fetched
-        above, instead of a fresh query - keeps the lookup restricted to this
-        user's own Confirmed bookings only."""
+        """Finds a booking from this user's own active bookings list."""
         for b in active_bookings:
             if b["booking_id"] == booking_id:
                 return b

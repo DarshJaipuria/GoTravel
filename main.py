@@ -1,19 +1,8 @@
 """
 main.py
 =====================================================
-Entry point for the GoTravel application.
-
-Behaviour:
-    - If gui.py exists in the project folder, it is
-      launched automatically (Tkinter GUI mode).
-    - If gui.py does NOT exist, the application falls
-      back to CLI mode automatically.
-
-Stage 1 note:
-    gui.py does not exist yet (it is built in Stage 10),
-    so this will always run in CLI mode for now. The
-    fallback logic is already in place so nothing needs
-    to change later.
+Entry point for GoTravel. Runs in CLI mode, or launches gui.py
+automatically if that file exists.
 
 Run with:  python main.py
 =====================================================
@@ -36,6 +25,8 @@ import packages
 import coupons
 import booking
 import wallet
+import invoices
+import reviews
 import seed_data
 
 
@@ -137,10 +128,7 @@ def handle_register():
 
 
 def handle_login():
-    """
-    Runs the login flow. Returns the logged-in user dict on
-    success, or None if login failed / was cancelled.
-    """
+    """Runs the login flow. Returns the user dict, or None if login failed."""
     success, result = login.login_user()
     if success:
         utils.print_success(f"Welcome back, {result['full_name']}!")
@@ -154,14 +142,8 @@ def handle_login():
 
 
 def bookings_menu(current_user):
-    """
-    Stage 6 submenu: book Flights/Trains/Hotels/Cabs/Packages,
-    view booking history, or cancel a booking. Kept as its own
-    submenu (like the admin management menus) so the main user
-    dashboard doesn't get too crowded.
-    """
+    """Submenu: book/view/cancel a booking, view invoice, or export bookings to CSV."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MY BOOKINGS")
         print("1. Book a Flight")
@@ -171,6 +153,8 @@ def bookings_menu(current_user):
         print("5. Book a Holiday Package")
         print("6. View My Bookings")
         print("7. Cancel a Booking")
+        print("8. View / Download Invoice")
+        print("9. Export My Bookings to CSV")
         print("0. Back")
 
         choice = input("\nEnter your choice: ").strip()
@@ -189,6 +173,38 @@ def bookings_menu(current_user):
             booking.view_my_bookings(current_user)
         elif choice == "7":
             booking.cancel_booking(current_user)
+        elif choice == "8":
+            invoices.view_or_regenerate_invoice(current_user)
+        elif choice == "9":
+            invoices.handle_export_bookings_csv(current_user)
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
+def reviews_menu(current_user):
+    """Submenu: leave a review, view your reviews, or check an item's reviews."""
+    while True:
+        utils.print_logo()
+        utils.print_header("REVIEWS")
+        print("1. Review a Booking Experience")
+        print("2. Review a Completed Trip")
+        print("3. View My Reviews")
+        print("4. View Reviews for an Item")
+        print("0. Back")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            reviews.leave_booking_review(current_user)
+        elif choice == "2":
+            reviews.leave_trip_review(current_user)
+        elif choice == "3":
+            reviews.view_my_reviews(current_user)
+        elif choice == "4":
+            reviews.view_item_reviews()
         elif choice == "0":
             return
         else:
@@ -197,14 +213,8 @@ def bookings_menu(current_user):
 
 
 def wallet_menu(current_user):
-    """
-    Stage 7 submenu: view wallet balance/transaction history or
-    add funds (simulated top-up). Kept as its own submenu, like
-    the Bookings submenu, so the main user dashboard doesn't get
-    too crowded.
-    """
+    """Submenu: view wallet balance/history, or add funds."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MY WALLET")
         print("1. View Wallet & Transaction History")
@@ -225,16 +235,8 @@ def wallet_menu(current_user):
 
 
 def user_dashboard(current_user):
-    """
-    Menu shown after a successful login. Search features cover
-    Flights/Trains (Stage 4), Hotels/Cabs (Stage 5), and Holiday
-    Packages (Stage 6). Booking, viewing, and cancelling live in
-    the Bookings submenu (Stage 6), which now also handles coupons
-    and payment method selection at checkout (Stage 7). Wallet
-    top-ups and history live in their own submenu (Stage 7).
-    """
+    """Main menu shown after a successful user login."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header(f"WELCOME, {current_user['full_name'].upper()}")
         print("1. Search Flights")
@@ -242,11 +244,12 @@ def user_dashboard(current_user):
         print("3. Search Hotels")
         print("4. Search Cabs")
         print("5. Search Holiday Packages")
-        print("6. My Bookings (Book / View / Cancel)")
+        print("6. My Bookings (Book / View / Cancel / Invoice / Export)")
         print("7. My Wallet (View / Add Funds)")
-        print("8. View My Profile")
-        print("9. Edit My Profile")
-        print("10. Change Password")
+        print("8. Reviews")
+        print("9. View My Profile")
+        print("10. Edit My Profile")
+        print("11. Change Password")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -266,10 +269,12 @@ def user_dashboard(current_user):
         elif choice == "7":
             wallet_menu(current_user)
         elif choice == "8":
-            user.view_profile(current_user)
+            reviews_menu(current_user)
         elif choice == "9":
-            current_user = user.edit_profile(current_user)
+            user.view_profile(current_user)
         elif choice == "10":
+            current_user = user.edit_profile(current_user)
+        elif choice == "11":
             user.change_password(current_user)
         elif choice == "0":
             utils.log_activity(f"User logged out: {current_user['email']}")
@@ -282,11 +287,7 @@ def user_dashboard(current_user):
 
 
 def handle_admin_login():
-    """
-    Runs the admin login flow. If no admin accounts exist yet,
-    offers to create the very first one instead (bootstrap).
-    Returns the logged-in admin dict on success, or None.
-    """
+    """Runs the admin login flow (or first-time bootstrap setup). Returns the admin dict or None."""
     if admin.get_admin_count() == 0:
         utils.print_info("No admin accounts exist yet.")
         try:
@@ -320,9 +321,8 @@ def handle_admin_login():
 
 
 def flights_management_menu():
-    """Admin submenu for managing Flights (Stage 4)."""
+    """Admin submenu for managing Flights."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE FLIGHTS")
         print("1. View / Search Flights")
@@ -349,9 +349,8 @@ def flights_management_menu():
 
 
 def trains_management_menu():
-    """Admin submenu for managing Trains (Stage 4)."""
+    """Admin submenu for managing Trains."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE TRAINS")
         print("1. View / Search Trains")
@@ -378,9 +377,8 @@ def trains_management_menu():
 
 
 def hotels_management_menu():
-    """Admin submenu for managing Hotels and Rooms (Stage 5)."""
+    """Admin submenu for managing Hotels and Rooms."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE HOTELS")
         print("1. View / Search Hotels")
@@ -410,9 +408,8 @@ def hotels_management_menu():
 
 
 def cabs_management_menu():
-    """Admin submenu for managing Cabs (Stage 5)."""
+    """Admin submenu for managing Cabs."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE CABS")
         print("1. View / Search Cabs")
@@ -439,9 +436,8 @@ def cabs_management_menu():
 
 
 def packages_management_menu():
-    """Admin submenu for managing Holiday Packages (Stage 6)."""
+    """Admin submenu for managing Holiday Packages."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE HOLIDAY PACKAGES")
         print("1. View / Search Packages")
@@ -468,9 +464,8 @@ def packages_management_menu():
 
 
 def coupons_management_menu():
-    """Admin submenu for managing Coupons (Stage 7)."""
+    """Admin submenu for managing Coupons."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MANAGE COUPONS")
         print("1. View / Search Coupons")
@@ -489,6 +484,28 @@ def coupons_management_menu():
             coupons.admin_edit_coupon()
         elif choice == "4":
             coupons.admin_delete_coupon()
+        elif choice == "0":
+            return
+        else:
+            utils.print_error("Invalid choice. Please select a valid menu option.")
+            utils.pause()
+
+
+def reviews_management_menu():
+    """Admin submenu for moderating Reviews."""
+    while True:
+        utils.print_logo()
+        utils.print_header("MANAGE REVIEWS")
+        print("1. View All Reviews")
+        print("2. Delete Review")
+        print("0. Back to Admin Panel")
+
+        choice = input("\nEnter your choice: ").strip()
+
+        if choice == "1":
+            reviews.admin_view_reviews()
+        elif choice == "2":
+            reviews.admin_delete_review()
         elif choice == "0":
             return
         else:
@@ -536,16 +553,8 @@ def handle_load_sample_data():
 
 
 def admin_dashboard(current_admin):
-    """
-    Menu shown after a successful admin login. Covers user account
-    management (Stage 3), flight/train management (Stage 4),
-    hotel/cab management (Stage 5), package management plus a
-    read-only view of every booking (Stage 6), and coupon
-    management (Stage 7). As more tables are added in later
-    stages, this menu grows with them.
-    """
+    """Main menu shown after a successful admin login."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header(f"ADMIN PANEL - {current_admin['admin_name'].upper()}")
         print("1. View All Users")
@@ -559,8 +568,10 @@ def admin_dashboard(current_admin):
         print("9. Manage Cabs")
         print("10. Manage Holiday Packages")
         print("11. Manage Coupons")
-        print("12. View All Bookings")
-        print("13. Load Sample Data (Airports/Stations/Flights/Trains/Hotels/Cabs/Packages)")
+        print("12. Manage Reviews")
+        print("13. View All Bookings")
+        print("14. Export All Bookings to CSV")
+        print("15. Load Sample Data (Airports/Stations/Flights/Trains/Hotels/Cabs/Packages)")
         print("0. Logout")
 
         choice = input("\nEnter your choice: ").strip()
@@ -593,8 +604,12 @@ def admin_dashboard(current_admin):
         elif choice == "11":
             coupons_management_menu()
         elif choice == "12":
-            admin.view_all_bookings()
+            reviews_management_menu()
         elif choice == "13":
+            admin.view_all_bookings()
+        elif choice == "14":
+            invoices.admin_export_all_bookings_csv()
+        elif choice == "15":
             handle_load_sample_data()
         elif choice == "0":
             utils.log_activity(f"Admin logged out: {current_admin['email']}")
@@ -609,7 +624,6 @@ def admin_dashboard(current_admin):
 def main_menu():
     """The main guest-facing CLI menu loop (before login)."""
     while True:
-        utils.clear_screen()
         utils.print_logo()
         utils.print_header("MAIN MENU")
         print("1. Login")
@@ -651,7 +665,6 @@ def main_menu():
 
 def run_cli():
     """Runs the CLI version of the application."""
-    utils.clear_screen()
     utils.print_logo()
     print("Welcome to GoTravel - A Complete Travel Booking & Management System")
     utils.pause()

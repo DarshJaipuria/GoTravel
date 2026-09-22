@@ -1,17 +1,8 @@
 """
 cabs.py
 =====================================================
-Everything related to Cabs:
-    - search_cabs()      - used by logged-in users (browse only,
-                            booking itself lives in booking.py)
-    - Admin management: view/search all cabs, add, edit, delete
-
-Unlike Flights/Trains, a cab is a single vehicle booked as a
-whole (not sold seat-by-seat), so availability is tracked with
-a simple status: 'Available' or 'Booked'.
-
-Every function below lets the user type 'back' at any prompt
-to cancel out and return to the menu (see utils.GoBack).
+Everything related to Cabs: search for users, admin
+add/edit/delete. A cab is booked whole (status Available/Booked).
 =====================================================
 """
 
@@ -33,11 +24,7 @@ def _format_cab_rows(cabs):
 
 
 def search_cabs():
-    """
-    User-facing cab search. Asks for source city, destination
-    city, and an optional travel date. Shows matching available
-    cabs. Browse only - booking is done from the Bookings menu.
-    """
+    """User-facing cab search, browse only (booking is done from the Bookings menu)."""
     utils.print_header("SEARCH CABS", show_back_hint=True)
 
     try:

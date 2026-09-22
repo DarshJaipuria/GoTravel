@@ -1,16 +1,8 @@
 """
 flights.py
 =====================================================
-Everything related to Flights:
-    - search_flights()      - used by logged-in users (browse only,
-                               booking itself lives in booking.py)
-    - Admin management: view/search all flights, add, edit, delete
-
-Depends on the Airports table (reference data) which is
-populated by seed_data.py.
-
-Every function below lets the user type 'back' at any prompt
-to cancel out and return to the menu (see utils.GoBack).
+Everything related to Flights: search for users, admin
+add/edit/delete/view. Depends on the Airports table.
 =====================================================
 """
 
@@ -63,11 +55,7 @@ def _format_flight_rows(flights):
 
 
 def search_flights():
-    """
-    User-facing flight search. Asks for source city, destination
-    city, and an optional travel date. Shows matching upcoming
-    flights. Browse only - booking is done from the Bookings menu.
-    """
+    """User-facing flight search, browse only (booking is done from the Bookings menu)."""
     utils.print_header("SEARCH FLIGHTS", show_back_hint=True)
     _print_airport_reference()
 
@@ -115,10 +103,7 @@ def search_flights():
 # ---------------------------------------------------------
 
 def admin_view_flights():
-    """
-    Admin flight listing with optional filters. Blank inputs mean
-    'no filter on this field'. Shows up to 40 results at a time.
-    """
+    """Admin flight listing with optional From/To filters."""
     utils.print_header("VIEW / SEARCH FLIGHTS", show_back_hint=True)
     try:
         source_city = utils.get_input("From (city, optional): ", default="")

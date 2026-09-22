@@ -1,19 +1,8 @@
 """
 admin.py
 =====================================================
-Handles the admin side of GoTravel:
-    - Admin login
-    - First-time "bootstrap" admin creation (only when
-      the Admins table is empty - there is no public
-      admin registration for security reasons)
-    - Adding further admins (only usable by an already
-      logged-in admin, from the admin dashboard)
-    - User management: view, search, activate/deactivate,
-      and delete user accounts
-
-As more tables are added in later stages (Flights, Hotels,
-Bookings, etc.), this module gains more management functions,
-but the login/bootstrap logic here does not change.
+Admin login (with first-time bootstrap setup), and admin
+management of user accounts and bookings overview.
 =====================================================
 """
 
@@ -36,17 +25,7 @@ def _email_exists(email):
 
 
 def register_admin(is_bootstrap=False):
-    """
-    Creates a new admin account.
-
-    Parameters:
-        is_bootstrap (bool): True when this is the very first
-            admin account being created (no login required).
-            False when an existing admin is adding a colleague.
-
-    Returns:
-        (success: bool, message: str)
-    """
+    """Creates a new admin account. Returns (success, message)."""
     while True:
         if is_bootstrap:
             utils.print_header("FIRST-TIME ADMIN SETUP")
@@ -98,12 +77,7 @@ def register_admin(is_bootstrap=False):
 
 
 def admin_login():
-    """
-    Runs the admin login flow.
-
-    Returns:
-        (success: bool, admin_dict_or_message)
-    """
+    """Runs the admin login flow. Returns (success, admin_dict_or_message)."""
     utils.print_header("ADMIN LOGIN", show_back_hint=True)
 
     try:
@@ -270,11 +244,7 @@ def delete_user():
 
 
 def view_all_bookings():
-    """
-    Admin-facing overview of every booking made across all users
-    (Stage 6). Read-only - cancellations are still done by the
-    user themselves from their own Bookings menu.
-    """
+    """Admin-facing read-only overview of every booking, across all users."""
     utils.print_header("ALL BOOKINGS")
     bookings = database.fetch_query(
         """
@@ -316,11 +286,7 @@ def view_all_bookings():
 
 
 def view_all_users_inline():
-    """
-    Same as view_all_users() but without a header/pause - used to
-    show the user list right before asking for a User ID, so the
-    admin doesn't have to look it up separately.
-    """
+    """Like view_all_users() but without a header/pause, for use inside another prompt."""
     users = database.fetch_query(
         "SELECT user_id, full_name, email, is_active FROM Users ORDER BY user_id"
     )

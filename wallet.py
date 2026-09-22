@@ -1,23 +1,8 @@
 """
 wallet.py
 =====================================================
-Handles the user Wallet (Stage 7):
-    - view_wallet()   - shows balance + recent transaction history
-    - add_funds()     - simulated top-up (no real payment gateway -
-                        in line with the rest of this project, the
-                        user just picks an amount and a "payment
-                        method" label, and the wallet is credited
-                        as if that payment had succeeded)
-    - credit_wallet() / debit_wallet() - low-level helpers used
-      both by add_funds() above and by booking.py (debiting for
-      a wallet-paid booking, crediting a refund on cancellation)
-
-Every WalletTransactions row snapshots the resulting balance, so a
-user's transaction history reads clearly even without recomputing
-anything from Users.wallet_balance.
-
-Every user-facing function below lets the user type 'back' at any
-prompt to cancel out and return to the menu (see utils.GoBack).
+Handles the user Wallet: view balance/history, add funds
+(simulated top-up), and credit/debit helpers used by booking.py.
 =====================================================
 """
 
@@ -36,7 +21,7 @@ def get_wallet_balance(user_id):
 
 
 def _record_transaction(user_id, transaction_type, amount, description, balance_after):
-    """Inserts one row into WalletTransactions. Logs but never raises on failure."""
+    """Inserts one row into WalletTransactions."""
     success, result = database.execute_query(
         """
         INSERT INTO WalletTransactions (user_id, transaction_type, amount, description, balance_after)
@@ -50,13 +35,7 @@ def _record_transaction(user_id, transaction_type, amount, description, balance_
 
 
 def credit_wallet(user_id, amount, description):
-    """
-    Adds `amount` to the user's wallet_balance and logs a Credit
-    transaction. Used for top-ups (add_funds) and for refunding a
-    cancelled booking (see booking.cancel_booking).
-
-    Returns (success: bool, new_balance_or_error_message).
-    """
+    """Adds `amount` to the wallet and logs a Credit transaction."""
     success, result = database.execute_query(
         "UPDATE Users SET wallet_balance = wallet_balance + %s WHERE user_id = %s",
         (amount, user_id),
@@ -70,15 +49,7 @@ def credit_wallet(user_id, amount, description):
 
 
 def debit_wallet(user_id, amount, description):
-    """
-    Subtracts `amount` from the user's wallet_balance and logs a
-    Debit transaction. The caller is responsible for checking there
-    is enough balance BEFORE calling this (booking.py's checkout
-    flow already refuses to offer Wallet as a payment option unless
-    the balance covers the amount due).
-
-    Returns (success: bool, new_balance_or_error_message).
-    """
+    """Subtracts `amount` from the wallet and logs a Debit transaction."""
     success, result = database.execute_query(
         "UPDATE Users SET wallet_balance = wallet_balance - %s WHERE user_id = %s",
         (amount, user_id),
@@ -123,12 +94,7 @@ def view_wallet(user):
 
 
 def add_funds(user):
-    """
-    Lets the user top up their wallet. There is no real payment
-    gateway (out of scope for this project) - the user picks an
-    amount and a payment method label, and the wallet is credited
-    immediately, as if the (simulated) payment succeeded.
-    """
+    """Lets the user top up their wallet (simulated - no real payment gateway)."""
     utils.print_header("ADD MONEY TO WALLET", show_back_hint=True)
     print(f"Current Balance: Rs. {get_wallet_balance(user['user_id'])}\n")
 

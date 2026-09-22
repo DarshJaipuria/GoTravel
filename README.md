@@ -14,7 +14,7 @@ Currently in development, built stage by stage.
 - [x] Stage 5 — Hotels & Cabs
 - [x] Stage 6 — Holiday Packages & Booking engine
 - [x] Stage 7 — Payments, Wallet & Coupons
-- [ ] Stage 8 — Reviews, Invoices & ticket generation
+- [x] Stage 8 — Reviews, Invoices & ticket generation
 - [ ] Stage 9 — Reports & Analytics
 - [ ] Stage 10 — Tkinter GUI & polish
 
@@ -55,6 +55,22 @@ Matplotlib (analytics, later stage).
    Card/UPI (top up your Wallet from **My Wallet** first).
    Cancelling a booking always refunds the amount to your
    Wallet.
+9. Every booking automatically saves a text invoice/ticket to
+   `files/invoices/invoice_<booking_id>.txt` and refreshes a
+   full CSV export at `files/invoices/bookings_<user_id>.csv` -
+   both can also be regenerated on demand from **My Bookings**.
+10. Once a booking's travel date (or check-out date, for
+    Hotels/Packages) has passed, leave a **Trip** review for it
+    from the **Reviews** menu; a **Booking** experience review
+    can be left any time, even before the trip happens.
+
+## Notes on generated files
+`files/invoices/` is created automatically the first time it's
+needed and is NOT meant to be committed - add it to `.gitignore`
+alongside `config.txt`/`logs.txt` if it isn't already:
+```
+files/invoices/
+```
 
 ## Project Structure
 ```
@@ -74,10 +90,14 @@ GoTravel/
 ├── booking.py                    Book / view / cancel + checkout (coupon + payment)
 ├── wallet.py                       Wallet balance, top-ups, credit/debit helpers
 ├── coupons.py                       Coupon validation + admin management
-├── seed_data.py                   Sample data generator
-├── sql/gotravel.sql                Database schema
+├── invoices.py                       Text invoice + CSV export generation
+├── reviews.py                         Booking/Trip reviews + admin moderation
+├── seed_data.py                         Sample data generator
+├── sql/gotravel.sql                     Database schema
 └── files/
     ├── config.example.txt   Tracked config template
     ├── config.txt             Your real config (gitignored)
-    └── logs.txt                 Activity log (gitignored)
+    ├── logs.txt                 Activity log (gitignored)
+    └── invoices/                  Generated invoices/tickets + CSV
+                                    exports (gitignored, auto-created)
 ```

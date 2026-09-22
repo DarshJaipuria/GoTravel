@@ -1,16 +1,8 @@
 """
 trains.py
 =====================================================
-Everything related to Trains:
-    - search_trains()       - used by logged-in users (browse only,
-                               booking itself lives in booking.py)
-    - Admin management: view/search all trains, add, edit, delete
-
-Depends on the Stations table (reference data) which is
-populated by seed_data.py.
-
-Every function below lets the user type 'back' at any prompt
-to cancel out and return to the menu (see utils.GoBack).
+Everything related to Trains: search for users, admin
+add/edit/delete/view. Depends on the Stations table.
 =====================================================
 """
 
@@ -63,11 +55,7 @@ def _format_train_rows(trains):
 
 
 def search_trains():
-    """
-    User-facing train search. Asks for source city, destination
-    city, and an optional travel date. Shows matching upcoming
-    trains. Browse only - booking is done from the Bookings menu.
-    """
+    """User-facing train search, browse only (booking is done from the Bookings menu)."""
     utils.print_header("SEARCH TRAINS", show_back_hint=True)
     _print_station_reference()
 
@@ -115,10 +103,7 @@ def search_trains():
 # ---------------------------------------------------------
 
 def admin_view_trains():
-    """
-    Admin train listing with optional filters. Blank inputs mean
-    'no filter on this field'. Shows up to 40 results at a time.
-    """
+    """Admin train listing with optional From/To filters."""
     utils.print_header("VIEW / SEARCH TRAINS", show_back_hint=True)
     try:
         source_city = utils.get_input("From (city, optional): ", default="")

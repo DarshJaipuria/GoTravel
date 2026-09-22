@@ -1,21 +1,9 @@
 """
 login.py
 =====================================================
-Handles user REGISTRATION and LOGIN (authentication only).
-
-Responsibilities:
-    - Collect and validate registration details
-    - Ensure email/phone are unique before creating an account
-    - Verify login credentials against the Users table
-    - Hash passwords (never store plain text)
-
-Profile viewing/editing and password changes for an
-ALREADY logged-in user live in user.py, not here - this
-module's job ends the moment a session starts or fails.
-
-Both register_user() and login_user() let the user type
-'back' at any prompt to cancel out and return to the main
-menu, instead of being forced to finish or restart the app.
+User registration and login (authentication only). Profile
+edits and password changes for an already-logged-in user
+live in user.py.
 =====================================================
 """
 
@@ -40,14 +28,7 @@ def _phone_exists(phone):
 
 
 def register_user():
-    """
-    Runs the full registration flow: collects details, validates
-    them, checks for duplicates, hashes the password, and inserts
-    the new user into the database.
-
-    Returns:
-        (success: bool, message: str)
-    """
+    """Runs the full registration flow. Returns (success, message)."""
     utils.print_header("CREATE A NEW ACCOUNT", show_back_hint=True)
 
     try:
@@ -103,15 +84,7 @@ def register_user():
 
 
 def login_user():
-    """
-    Runs the login flow: asks for email/phone + password, verifies
-    them against the database, and returns the user record on success.
-
-    Returns:
-        (success: bool, user_dict_or_message)
-        - On success: (True, user_dict)
-        - On failure: (False, error_message)
-    """
+    """Runs the login flow. Returns (success, user_dict_or_message)."""
     utils.print_header("LOGIN TO YOUR ACCOUNT", show_back_hint=True)
 
     try:

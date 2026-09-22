@@ -1,25 +1,8 @@
 """
 coupons.py
 =====================================================
-Everything related to Coupons (Stage 7):
-    - validate_coupon()   - used by booking.py's checkout flow to
-                             check a code the user enters and work
-                             out the discount it earns, WITHOUT
-                             committing anything yet
-    - mark_coupon_used()  - called by booking.py only after a
-                             booking is actually confirmed
-    - Admin management: view/search, add, edit, delete coupons
-
-A coupon gives either a flat discount (e.g. "Rs. 200 off") or a
-percentage discount (e.g. "10% off", optionally capped by
-max_discount_amount so a percentage coupon can't blow out on a
-huge booking). min_booking_amount stops a coupon being used on a
-booking too small to qualify. usage_limit (optional, None means
-unlimited) caps how many times a coupon can be redeemed in total;
-times_used tracks that count.
-
-Every admin function below lets the user type 'back' at any
-prompt to cancel out and return to the menu (see utils.GoBack).
+Everything related to Coupons: validating a code at checkout,
+tracking usage, and admin add/edit/delete/view.
 =====================================================
 """
 
@@ -31,14 +14,8 @@ import utils
 
 def validate_coupon(code, booking_amount):
     """
-    Looks up a coupon code and checks whether it can be applied to
-    a booking of `booking_amount`. Does NOT increment times_used -
-    that only happens once the booking is actually confirmed (see
-    mark_coupon_used, called from booking.py).
-
-    Returns:
-        (True, coupon_dict, discount_amount) if the coupon is valid
-        (False, error_message, 0) otherwise
+    Checks whether a coupon code can be applied to booking_amount.
+    Returns (True, coupon_dict, discount) or (False, message, 0).
     """
     coupon = database.fetch_query(
         "SELECT * FROM Coupons WHERE code = %s", (code.strip().upper(),), fetch_one=True
@@ -74,19 +51,7 @@ def validate_coupon(code, booking_amount):
 
 
 def get_applicable_coupons(booking_amount):
-    """
-    Returns every coupon that COULD currently be applied to a
-    booking of `booking_amount`: Active, not expired, under its
-    usage limit, and booking_amount at or above its
-    min_booking_amount. Used by booking.py to show the user a list
-    of coupons they can actually use, instead of asking them to
-    guess or already know a code.
-
-    Does not check anything else validate_coupon() checks later
-    (there's nothing else to check) - this is exactly the same set
-    of rules, just applied to every coupon at once instead of one
-    entered code.
-    """
+    """Returns every Active, unexpired coupon usable on booking_amount."""
     all_coupons = database.fetch_query(
         "SELECT * FROM Coupons WHERE status = 'Active' ORDER BY min_booking_amount"
     ) or []

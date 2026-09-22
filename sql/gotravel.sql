@@ -1,45 +1,13 @@
 -- =====================================================
 -- GoTravel Database Schema
--- =====================================================
--- This file is executed automatically by database.py
--- (initialize_database function) using the mysql-connector.
---
--- CONTENT SO FAR:
---   Stage 1: Database creation, Users, Admins
---   Stage 4: Airports, Stations, Flights, Trains
---   Stage 5: Hotels, Rooms, Cabs
---   Stage 6: Packages, Bookings
---   Stage 7: WalletTransactions, Coupons, plus
---            payment_method/coupon_code/discount_amount
---            columns on Bookings (see NOTE below)
---
--- FUTURE STAGES will ADD tables such as:
---   Reviews, Invoices, Reports, Notifications
--- These are intentionally NOT created yet to avoid
--- unused/empty tables before their features exist.
---
--- NOTE: this script only ever CREATEs tables - 'CREATE TABLE
--- IF NOT EXISTS' does nothing if the table already exists. So
--- if you already had GoTravel running BEFORE Stage 7, your
--- existing Bookings table does NOT get the three new Stage 7
--- columns (payment_method, coupon_code, discount_amount) just
--- because this file changed - CREATE TABLE alone can't add a
--- column to a table that's already there. That's fine though:
--- database.py's initialize_database() also runs a few ALTER
--- TABLE statements right after this script, specifically to
--- add those three columns to an EXISTING Bookings table without
--- touching any of its existing rows. Your old users and bookings
--- are kept exactly as they are - nothing here deletes any data.
+-- Run automatically by database.py's initialize_database().
 -- =====================================================
 
 CREATE DATABASE IF NOT EXISTS gotravel;
 
 USE gotravel;
 
--- -----------------------------------------------------
--- Table: Users
--- Stores customer accounts (created/used from Stage 2)
--- -----------------------------------------------------
+-- Table: Users - customer accounts
 CREATE TABLE IF NOT EXISTS Users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(100) NOT NULL,
@@ -54,10 +22,7 @@ CREATE TABLE IF NOT EXISTS Users (
     is_active TINYINT(1) DEFAULT 1
 );
 
--- -----------------------------------------------------
--- Table: Admins
--- Stores admin accounts (created/used from Stage 3)
--- -----------------------------------------------------
+-- Table: Admins - admin accounts
 CREATE TABLE IF NOT EXISTS Admins (
     admin_id INT AUTO_INCREMENT PRIMARY KEY,
     admin_name VARCHAR(100) NOT NULL,
@@ -67,10 +32,7 @@ CREATE TABLE IF NOT EXISTS Admins (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- -----------------------------------------------------
--- Table: Airports
--- Reference data for flight source/destination (Stage 4)
--- -----------------------------------------------------
+-- Table: Airports - reference data for flight source/destination
 CREATE TABLE IF NOT EXISTS Airports (
     airport_id INT AUTO_INCREMENT PRIMARY KEY,
     airport_code VARCHAR(5) NOT NULL UNIQUE,
@@ -79,10 +41,7 @@ CREATE TABLE IF NOT EXISTS Airports (
     country VARCHAR(50) DEFAULT 'India'
 );
 
--- -----------------------------------------------------
--- Table: Stations
--- Reference data for train source/destination (Stage 4)
--- -----------------------------------------------------
+-- Table: Stations - reference data for train source/destination
 CREATE TABLE IF NOT EXISTS Stations (
     station_id INT AUTO_INCREMENT PRIMARY KEY,
     station_code VARCHAR(10) NOT NULL UNIQUE,
@@ -90,9 +49,7 @@ CREATE TABLE IF NOT EXISTS Stations (
     city VARCHAR(50) NOT NULL
 );
 
--- -----------------------------------------------------
--- Table: Flights (Stage 4)
--- -----------------------------------------------------
+-- Table: Flights
 CREATE TABLE IF NOT EXISTS Flights (
     flight_id INT AUTO_INCREMENT PRIMARY KEY,
     flight_number VARCHAR(10) NOT NULL,
@@ -111,9 +68,7 @@ CREATE TABLE IF NOT EXISTS Flights (
     FOREIGN KEY (destination_airport_id) REFERENCES Airports(airport_id)
 );
 
--- -----------------------------------------------------
--- Table: Trains (Stage 4)
--- -----------------------------------------------------
+-- Table: Trains
 CREATE TABLE IF NOT EXISTS Trains (
     train_id INT AUTO_INCREMENT PRIMARY KEY,
     train_number VARCHAR(10) NOT NULL,
@@ -132,9 +87,7 @@ CREATE TABLE IF NOT EXISTS Trains (
     FOREIGN KEY (destination_station_id) REFERENCES Stations(station_id)
 );
 
--- -----------------------------------------------------
--- Table: Hotels (Stage 5)
--- -----------------------------------------------------
+-- Table: Hotels
 CREATE TABLE IF NOT EXISTS Hotels (
     hotel_id INT AUTO_INCREMENT PRIMARY KEY,
     hotel_name VARCHAR(150) NOT NULL,
@@ -144,10 +97,7 @@ CREATE TABLE IF NOT EXISTS Hotels (
     contact_number VARCHAR(15)
 );
 
--- -----------------------------------------------------
--- Table: Rooms (Stage 5)
--- Each hotel offers multiple room types at different prices
--- -----------------------------------------------------
+-- Table: Rooms - each hotel can have several room types
 CREATE TABLE IF NOT EXISTS Rooms (
     room_id INT AUTO_INCREMENT PRIMARY KEY,
     hotel_id INT NOT NULL,
@@ -158,12 +108,7 @@ CREATE TABLE IF NOT EXISTS Rooms (
     FOREIGN KEY (hotel_id) REFERENCES Hotels(hotel_id)
 );
 
--- -----------------------------------------------------
--- Table: Cabs (Stage 5)
--- Unlike Flights/Trains, a cab is booked as a whole vehicle,
--- not sold seat-by-seat - so status is Available/Booked
--- rather than an available_seats count.
--- -----------------------------------------------------
+-- Table: Cabs - booked as a whole vehicle, not seat-by-seat
 CREATE TABLE IF NOT EXISTS Cabs (
     cab_id INT AUTO_INCREMENT PRIMARY KEY,
     cab_number VARCHAR(15) NOT NULL,
@@ -178,12 +123,7 @@ CREATE TABLE IF NOT EXISTS Cabs (
     status VARCHAR(20) DEFAULT 'Available'
 );
 
--- -----------------------------------------------------
--- Table: Packages (Stage 6)
--- A fixed-itinerary holiday package with a limited number
--- of traveller slots, similar in spirit to how Cabs track
--- a simple availability count.
--- -----------------------------------------------------
+-- Table: Packages - fixed-itinerary holiday packages with limited slots
 CREATE TABLE IF NOT EXISTS Packages (
     package_id INT AUTO_INCREMENT PRIMARY KEY,
     package_name VARCHAR(150) NOT NULL,
@@ -196,20 +136,8 @@ CREATE TABLE IF NOT EXISTS Packages (
     status VARCHAR(20) DEFAULT 'Active'
 );
 
--- -----------------------------------------------------
--- Table: Bookings (Stage 6)
--- A single table covers every booking type. `booking_type`
--- ('Flight'/'Train'/'Hotel'/'Cab'/'Package') tells booking.py
--- which table `item_id` points into. `item_label` freezes a
--- human-readable snapshot at booking time so history still
--- reads clearly even if the original row changes later.
--- -----------------------------------------------------
--- payment_method/coupon_code/discount_amount were added in
--- Stage 7. A fresh install gets them immediately from this
--- CREATE TABLE. If you're upgrading an existing database from
--- before Stage 7, see the NOTE at the top of this file - those
--- columns get added separately by database.py, without deleting
--- any of your existing rows.
+-- Table: Bookings - one row per booking of any type.
+-- booking_type tells booking.py which table item_id points into.
 CREATE TABLE IF NOT EXISTS Bookings (
     booking_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -229,13 +157,7 @@ CREATE TABLE IF NOT EXISTS Bookings (
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );
 
--- -----------------------------------------------------
--- Table: WalletTransactions (Stage 7)
--- Every credit (top-up, refund) or debit (wallet-paid
--- booking) against a user's Users.wallet_balance is logged
--- here, with the resulting balance snapshotted so history
--- reads clearly without recomputing anything.
--- -----------------------------------------------------
+-- Table: WalletTransactions - every credit/debit against wallet_balance
 CREATE TABLE IF NOT EXISTS WalletTransactions (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -247,12 +169,7 @@ CREATE TABLE IF NOT EXISTS WalletTransactions (
     FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );
 
--- -----------------------------------------------------
--- Table: Coupons (Stage 7)
--- discount_type is 'Flat' (a fixed Rs. amount off) or
--- 'Percentage' (optionally capped by max_discount_amount).
--- usage_limit of NULL means unlimited redemptions.
--- -----------------------------------------------------
+-- Table: Coupons - discount_type is 'Flat' or 'Percentage'
 CREATE TABLE IF NOT EXISTS Coupons (
     coupon_id INT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(30) NOT NULL UNIQUE,
@@ -266,4 +183,17 @@ CREATE TABLE IF NOT EXISTS Coupons (
     expiry_date DATE,
     status VARCHAR(20) DEFAULT 'Active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table: Reviews - review_type is 'Booking' or 'Trip'
+CREATE TABLE IF NOT EXISTS Reviews (
+    review_id INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id INT NOT NULL,
+    user_id INT NOT NULL,
+    review_type VARCHAR(10) NOT NULL,
+    rating INT NOT NULL,
+    comment VARCHAR(500),
+    review_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES Bookings(booking_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
 );

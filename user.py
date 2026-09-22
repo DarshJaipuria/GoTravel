@@ -1,17 +1,8 @@
 """
 user.py
 =====================================================
-Handles operations for an ALREADY logged-in user:
-    - Viewing their profile
-    - Editing their profile details
-    - Changing their password
-
-Authentication (login/registration) lives in login.py.
-This module assumes a valid `user` dictionary (as returned
-by login.login_user) is passed in by main.py.
-
-edit_profile() and change_password() let the user type
-'back' at any prompt to cancel out with no changes saved.
+Profile view/edit and password change for an already
+logged-in user. Login/registration lives in login.py.
 =====================================================
 """
 
@@ -34,15 +25,7 @@ def view_profile(user):
 
 
 def edit_profile(user):
-    """
-    Lets the user update their name, phone, gender, date of birth,
-    and address. Email is intentionally NOT editable here to keep
-    it a stable login identifier.
-
-    Returns the refreshed user dictionary (whether or not any
-    field was actually changed), or the original `user` unchanged
-    if the edit is cancelled with 'back'.
-    """
+    """Lets the user update name/phone/gender/DOB/address. Email stays fixed."""
     utils.print_header("EDIT PROFILE", show_back_hint=True)
     print("Press Enter on any field to keep its current value.\n")
 
@@ -98,11 +81,7 @@ def edit_profile(user):
 
 
 def change_password(user):
-    """
-    Lets the logged-in user change their password after verifying
-    their current password. Returns nothing - the caller's `user`
-    dict does not store the password, so no refresh is needed.
-    """
+    """Lets the user change their password after verifying the current one."""
     utils.print_header("CHANGE PASSWORD", show_back_hint=True)
 
     try:

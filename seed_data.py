@@ -1,17 +1,8 @@
 """
 seed_data.py
 =====================================================
-Generates realistic sample data for Airports, Stations,
-Flights, Trains, Hotels, Rooms, Cabs, Holiday Packages, and
-Coupons so the application has something to search from (and
-apply at checkout) the moment it is set up.
-
-This is a data-generation utility, not a feature module -
-it is triggered once from the admin dashboard ("Load Sample
-Data"). It only inserts into a table if that table is
-currently empty, so running it again is always safe.
-
-Uses only the Python standard library (random, datetime).
+Generates sample Airports, Stations, Flights, Trains, Hotels,
+Rooms, Cabs, Packages, and Coupons for "Load Sample Data".
 =====================================================
 """
 
@@ -158,24 +149,6 @@ DRIVER_LAST_NAMES = [
 ]
 VEHICLE_STATE_CODES = ["DL", "MH", "KA", "TN", "WB", "UP", "RJ", "GJ", "PB", "HR"]
 
-# -----------------------------------------------------
-# Coupons (Stage 7)
-# -----------------------------------------------------
-# Each tuple is:
-#   (code, description, discount_type, discount_value,
-#    max_discount_amount, min_booking_amount, usage_limit, expiry_days)
-#
-# discount_type is 'Flat' (a fixed Rs. amount off) or 'Percentage'.
-# max_discount_amount is None for every Flat coupon (a flat discount
-# needs no cap) and a Rs. cap for most Percentage coupons, so a big
-# booking doesn't get an unreasonably large discount.
-# usage_limit of None means unlimited redemptions; a number caps how
-# many times that coupon can be used in total across all users.
-# expiry_days of None means the coupon never expires. A number is
-# turned into a real expiry_date by seed_coupons() below, counted
-# from whenever "Load Sample Data" is actually run - so coupons stay
-# valid ("available") for that many days from today, not from a
-# fixed date baked into this file.
 COUPON_TEMPLATES = [
     ("WELCOME100", "Welcome offer for new customers", "Flat", 100, None, 500, None, None),
     ("WELCOME200", "Welcome offer for new customers", "Flat", 200, None, 1000, None, None),
@@ -228,32 +201,18 @@ def _random_time():
 
 
 def _add_minutes(start_time, minutes):
-    """
-    Adds `minutes` to a datetime.time and returns the resulting
-    time, wrapping around a 24-hour clock if needed.
-    """
+    """Adds minutes to a time value, wrapping past midnight if needed."""
     combined = datetime.combine(date.today(), start_time) + timedelta(minutes=minutes)
     return combined.time()
 
 
 def _random_future_date(max_days_ahead=45):
-    """
-    Returns a random date between today (whichever day this actually
-    runs on) and that many days after today. Since this is always
-    anchored to "today", every flight/train/cab seeded in a single
-    run of Load Sample Data is guaranteed to be dated no earlier than
-    the day you actually loaded the data - there's no fixed date
-    baked in here.
-    """
+    """Returns a random date between today and max_days_ahead days from now."""
     return date.today() + timedelta(days=random.randint(0, max_days_ahead))
 
 
 def _all_hotel_cab_cities():
-    """
-    Returns the combined, de-duplicated list of cities used for
-    Hotels and Cabs: every airport city plus a handful of scenic
-    tourist towns that don't have their own airport.
-    """
+
     airport_cities = [city for _, _, city in AIRPORTS]
     combined = airport_cities + EXTRA_HOTEL_CITIES
     # De-duplicate while preserving order
@@ -271,11 +230,7 @@ def _all_hotel_cab_cities():
 # -----------------------------------------------------
 
 def seed_airports():
-    """
-    Inserts the AIRPORTS list if the Airports table is currently
-    empty. Returns a dict mapping airport_code -> airport_id for
-    every airport now in the table (existing or newly inserted).
-    """
+
     count_result = database.fetch_query("SELECT COUNT(*) AS total FROM Airports", fetch_one=True)
     existing_count = count_result["total"] if count_result else 0
 
@@ -292,11 +247,7 @@ def seed_airports():
 
 
 def seed_stations():
-    """
-    Inserts the STATIONS list if the Stations table is currently
-    empty. Returns a dict mapping station_code -> station row for
-    every station now in the table.
-    """
+
     count_result = database.fetch_query("SELECT COUNT(*) AS total FROM Stations", fetch_one=True)
     existing_count = count_result["total"] if count_result else 0
 
@@ -317,17 +268,7 @@ def seed_stations():
 # -----------------------------------------------------
 
 def seed_flights(airport_lookup, target_count=480):
-    """
-    Clears out the Flights table and inserts `target_count` freshly
-    generated flight records, every time this runs - unlike Hotels/
-    Rooms/Packages below, Flights has a travel_date that goes stale
-    as real time passes, so re-running Load Sample Data always wipes
-    old flights and regenerates them dated from today (whichever day
-    that turns out to be) rather than leaving old dates behind.
 
-    Uses the airport_lookup dict (code -> row) produced by
-    seed_airports(). Returns the number of flights inserted.
-    """
     database.execute_query("DELETE FROM Flights")
 
     airport_codes = list(airport_lookup.keys())
@@ -374,15 +315,7 @@ def seed_flights(airport_lookup, target_count=480):
 
 
 def seed_trains(station_lookup, target_count=480):
-    """
-    Clears out the Trains table and inserts `target_count` freshly
-    generated train records, every time this runs - same reasoning
-    as seed_flights() above: travel_date goes stale over time, so
-    the table is always refreshed rather than left with old dates.
 
-    Uses the station_lookup dict (code -> row) produced by
-    seed_stations(). Returns the number of trains inserted.
-    """
     database.execute_query("DELETE FROM Trains")
 
     station_codes = list(station_lookup.keys())
@@ -433,13 +366,7 @@ def seed_trains(station_lookup, target_count=480):
 # -----------------------------------------------------
 
 def seed_hotels(target_hotel_count=160):
-    """
-    Inserts randomly generated Hotels, each with 2-3 Room types,
-    if the Hotels table is currently empty. Aims for roughly
-    target_hotel_count hotels (~450-500 room rows in total).
 
-    Returns (hotels_inserted, rooms_inserted) - both 0 if skipped.
-    """
     count_result = database.fetch_query("SELECT COUNT(*) AS total FROM Hotels", fetch_one=True)
     if count_result and count_result["total"] > 0:
         return 0, 0
@@ -492,15 +419,7 @@ def seed_hotels(target_hotel_count=160):
 
 
 def seed_cabs(target_count=480):
-    """
-    Clears out the Cabs table and inserts `target_count` freshly
-    generated cab records, every time this runs - same reasoning
-    as seed_flights()/seed_trains(): travel_date goes stale over
-    time, so the table is always refreshed rather than left with
-    old dates.
 
-    Returns the number of cabs inserted.
-    """
     database.execute_query("DELETE FROM Cabs")
 
     cities = _all_hotel_cab_cities()
@@ -546,14 +465,7 @@ def seed_cabs(target_count=480):
 
 
 def seed_packages(target_count=60):
-    """
-    Inserts `target_count` randomly generated holiday package
-    records if the Packages table is currently empty. Reuses the
-    same city list as Hotels/Cabs, since packages are sold to the
-    same destinations.
 
-    Returns the number of packages inserted (0 if already seeded).
-    """
     count_result = database.fetch_query("SELECT COUNT(*) AS total FROM Packages", fetch_one=True)
     if count_result and count_result["total"] > 0:
         return 0
@@ -600,24 +512,7 @@ def seed_packages(target_count=60):
 
 
 def seed_coupons():
-    """
-    Clears out the Coupons table and inserts the COUPON_TEMPLATES
-    list fresh, every time this runs - unlike Hotels/Rooms/Packages,
-    a coupon has an expiry_date that goes stale over time, so this
-    table is always refreshed rather than left with old expiry
-    dates. NOTE: this also removes any coupon an admin added
-    manually through Manage Coupons - since Coupons is refreshed
-    every time for the same date-staleness reason as Flights/Trains/
-    Cabs, a manually-added coupon won't survive the next "Load
-    Sample Data" run either.
 
-    Each template's expiry_days is converted into a real calendar
-    date here, counted from today (whenever "Load Sample Data" is
-    actually run) - a template with expiry_days set to None becomes
-    a coupon that never expires.
-
-    Returns the number of coupons inserted.
-    """
     database.execute_query("DELETE FROM Coupons")
 
     rows = []
@@ -643,32 +538,7 @@ def seed_coupons():
 
 
 def run_full_seed():
-    """
-    Runs the complete seeding process: Airports, Stations, then
-    Flights, Trains, Hotels/Rooms, Cabs, Packages, and Coupons
-    built on top of them.
-
-    Airports/Stations/Hotels/Rooms/Packages are only populated if
-    currently empty, so re-running this is safe and won't duplicate
-    or disturb them. Flights, Trains, Cabs, and Coupons are
-    different: each of those is always cleared out and freshly
-    regenerated on every call, because they carry a date
-    (travel_date or expiry_date) that goes stale as real time
-    passes - so every time "Load Sample Data" is run, those four
-    always come back dated from that day forward, no matter how
-    long ago they were last seeded. See each seed_*() function's
-    own docstring for details.
-
-    Returns a summary dict:
-        {"airports": <total rows now>, "stations": <total rows now>,
-         "flights_inserted": <rows just inserted - always refreshed>,
-         "trains_inserted": <rows just inserted - always refreshed>,
-         "hotels_inserted": <rows just inserted, 0 if already had data>,
-         "rooms_inserted": <rows just inserted, 0 if already had data>,
-         "cabs_inserted": <rows just inserted - always refreshed>,
-         "packages_inserted": <rows just inserted, 0 if already had data>,
-         "coupons_inserted": <rows just inserted - always refreshed>}
-    """
+ 
     airport_lookup = seed_airports()
     station_lookup = seed_stations()
 
