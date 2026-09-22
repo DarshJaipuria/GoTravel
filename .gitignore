@@ -13,6 +13,7 @@ env/
 
 # Logs (grow constantly, not meaningful in version control)
 files/logs.txt
+files/invoices/
 
 # Real DB credentials - only files/config.example.txt is tracked
 files/config.txt
